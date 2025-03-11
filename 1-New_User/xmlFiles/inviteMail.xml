@@ -1,0 +1,16 @@
+--myboundary
+Content-Type: application/vnd.aconex.mail.v3+xml
+
+<Mail>
+TO_USERS_GO_HERE
+<MailSubject>SUBJECT_GOES_HERE</MailSubject>
+<MailTypeId>1879048551</MailTypeId>
+<RichMailText>true</RichMailText>
+<TotalAttachmentCount>ATTACHMENT_COUNT_GOES_HERE</TotalAttachmentCount>
+<ResponseRequired>8</ResponseRequired>
+<ResponseRequiredDate>RESPONSE_REQ_DATE_HERE</ResponseRequiredDate>
+<MailBody>
+MAIL_BODY_HERE
+</MailBody>
+</Mail>
+

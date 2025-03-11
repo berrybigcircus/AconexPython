@@ -1,0 +1,3 @@
+##Enter user emails / full names below, on separate lines:
+bob@banana.com
+Charlotte Newgent
