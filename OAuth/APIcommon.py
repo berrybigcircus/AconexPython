@@ -1,14 +1,22 @@
 import json
 import requests
+from base64 import b64encode
 
 import requests_cache
 session = requests_cache.CachedSession('test', expire_after=60)
+
+#For setting up
+def basic_auth(username, password):
+    token = b64encode(f'{username}:{password}'.encode('utf-8')).decode('ascii')
+    return f'Basic {token}'
+
 
 def jprint(obj):
     # create a formatted string of the Python JSON object
     text = json.dumps(obj, sort_keys=True, indent=4)
     print(text)
 
+#API Requests
 def getAPIResponse(url, headers, explanation) -> str:
     response = session.get(url, headers=headers)
 
@@ -38,6 +46,9 @@ def postAPIResponse(url, headers, body, explanation) -> str:
         print(response.status_code)
 
     return response.text
+
+
+#Specific functions
 
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection
     uniqueID: str = checklistJson["id"]

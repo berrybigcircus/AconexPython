@@ -1,4 +1,4 @@
-from OAuth.APIcommon import getAPIResponse, putAPIResponse, postAPIResponse, jprint
+from OAuth.APIcommon import getAPIResponse, putAPIResponse, postAPIResponse, jprint, putNoteInFirstQuestion
 import json
 from inspectionRenamer import getNewInspectionTitle
 
@@ -169,7 +169,7 @@ def cleanItems(ogChecklist, createdChecklist):
     finalChecklist["groups"] = fGroups
 
     # add comment to first checklist item with a new random id, and that it is a duplicate
-    tempItems, tempGroups = putNoteInFirstQuestion(checklistJson)
+    tempItems, tempGroups = putNoteInFirstQuestion(createdChecklist, ogChecklist["id"])
 
     return finalChecklist["items"], finalChecklist["groups"]
 

@@ -1,5 +1,5 @@
 import requests #for making http requests
-from base64 import b64encode
+from OAuth.APIcommon import basic_auth
 import requests_cache #this will cache the API calls
 requests_cache.install_cache()
 
@@ -7,10 +7,6 @@ LOBBYURL = 'https://constructionandengineering-ea.oraclecloud.com/auth/token' #e
 
 clientID = 'SCP_Henry_Brothers_Aconex_Aconex_client_APPID'
 clientSecret = '4342a5ca-d9d1-492c-a135-61736eaf8395'
-
-def basic_auth(username, password):
-    token = b64encode(f'{username}:{password}'.encode('utf-8')).decode('ascii')
-    return f'Basic {token}'
 
 #Request a token
 token = basic_auth(clientID, clientSecret)

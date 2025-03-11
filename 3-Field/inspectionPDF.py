@@ -53,13 +53,16 @@ def main(passedBearer, env):
             }
     putAPIResponse(url, headers, body, "updating the Checklist's ID record")
 
+ #why does it not work? it looks good, but doesn't wokr :(
+ #IT is Oracle's fault, the PDF is not updating
 def addUniqueID(checklistJson, duplicateID=""):
     uniqueID: str = checklistJson["id"]
 
     # find the question in the pdf form asking for the unique id
     index, idQuestion = findIDQuestion(checklistJson)
     print(idQuestion)
-    idQuestion["response"]["value"] = "TEST"
+    if not idQuestion["response"]: idQuestion["response"] = {}
+    idQuestion["response"]["value"] = uniqueID
     if duplicateID != "":  # if this checklist is a duplicate, add this into the comment as well
         idQuestion["response"]["value"] += " (Duplicate of " + duplicateID + ")"
 
@@ -69,7 +72,7 @@ def addUniqueID(checklistJson, duplicateID=""):
     print(temp)
     return [temp]
 
-    #why does it not work? it looks good, but doesn't wokr :(
+
 
 def findIDQuestion(checklistJson):
     for i, itemJson in enumerate(checklistJson["items"]):
