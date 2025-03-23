@@ -51,6 +51,8 @@ def main(passedBearer, env):
             "items": checklistJson["items"],
             "groups": checklistJson["groups"]
             }
+
+    print(body)
     putAPIResponse(url, headers, body, "updating the Checklist's ID record")
 
  #why does it not work? it looks good, but doesn't wokr :(
@@ -60,7 +62,7 @@ def addUniqueID(checklistJson, duplicateID=""):
 
     # find the question in the pdf form asking for the unique id
     index, idQuestion = findIDQuestion(checklistJson)
-    print(idQuestion)
+
     if not idQuestion["response"]: idQuestion["response"] = {}
     idQuestion["response"]["value"] = uniqueID
     if duplicateID != "":  # if this checklist is a duplicate, add this into the comment as well
@@ -69,7 +71,6 @@ def addUniqueID(checklistJson, duplicateID=""):
     #just take the ID and response fields, only fields required for put request
     temp = {"id": idQuestion["id"], "response": {'value': idQuestion["response"]["value"]}}
 
-    print(temp)
     return [temp]
 
 

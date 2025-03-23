@@ -1,5 +1,7 @@
 import json
 import requests
+import pickle
+import datetime
 from base64 import b64encode
 
 import requests_cache
@@ -47,8 +49,80 @@ def postAPIResponse(url, headers, body, explanation) -> str:
 
     return response.text
 
-
 #Specific functions
+def convertDateTime(dateResponseRaw : str, format : str) -> str:
+    if dateResponseRaw:
+        date = datetime.datetime.strptime(dateResponseRaw, "%Y-%m-%dT%H:%M:%S.%fZ")
+        return datetime.datetime.strftime(date, format)
+
+    else:
+        return ""
+
+def indexInput(maxVal):
+    valid = False
+
+    while valid == False:
+        userInput = input("Enter index: ")
+
+        if not userInput.isdigit():
+            print("Enter a number.")
+            continue
+
+        chosenIndex = int(userInput)
+        if chosenIndex > maxVal or chosenIndex < 0:
+            print("Enter a number between 0 and %d." % maxVal)
+            continue
+
+        return chosenIndex
+
+class Project():
+    def __init__(self, pname: str, pID: str, pCode: str = None):
+        self.__projectname = pname
+        self.__projectID = pID
+        self.__projectCode = pCode
+
+    def getProject(self) -> (str, str):
+        return self.__projectname, self.__projectID
+
+    def projectCodePrefix(self) -> str:
+        if self.__projectCode:
+            return self.__projectCode + " - "
+        else:
+            return ""
+
+def projectSelection(debug: bool = False) -> Project:
+    ##Ask for project
+    try:
+        fp = open("../getAllProjects/projectList.txt", "rb")  # load stored projects
+        projectsList = pickle.load(fp)  # load as project dictionary
+        fp.close()
+    except IOError:
+        print("Error loading project list.")
+        exit()
+
+    print("CURRENT PROJECTS:")
+    for i, (pName, pID) in enumerate(projectsList.items()):  # print projects to user
+        print("    %d - %s (%s)" % (i, pName, pID))
+
+    confirm = "n"
+    projectname : str
+    chosenProjectID : str
+
+    if debug == True:
+        projectname = "HB Test"
+        chosenProjectID = "1879048648"
+        confirm = "Y"
+
+    while confirm.upper() != "Y" and confirm.lower() != "yes":
+        projectIndex = indexInput(len(projectsList) - 1)
+        print("Project - %s" % list(projectsList)[projectIndex])
+
+        confirm = input("Confirm (Y/N):")
+        chosenProjectID = list(projectsList.values())[projectIndex]
+        projectname = list(projectsList)[projectIndex]
+
+    return Project(projectname, chosenProjectID)
+
 
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection
     uniqueID: str = checklistJson["id"]

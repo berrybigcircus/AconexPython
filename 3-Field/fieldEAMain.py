@@ -1,8 +1,8 @@
 from OAuth import EAsetup #perform EA auth
 
-import exporting
-import inspectionRenamer
-import inspectionDuplicator
+# import exporting
+# import inspectionRenamer
+# import inspectionDuplicator
 import inspectionPDF
 
 #exporting.main(EAsetup.bearer, "https://ea1.aconex.com")  #pass in environment, for urls
