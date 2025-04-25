@@ -4,6 +4,7 @@ import requests_cache #this will cache the API calls
 requests_cache.install_cache()
 
 LOBBYURL = 'https://constructionandengineering.oraclecloud.com/auth/token' #endpoint
+env = "https://uk1.aconex.co.uk"
 
 clientID = 'SCP_Henry_Brothers_Python_ACONEX_client_APPID'
 clientSecret = 'idcscs-843c6e85-95fe-4a30-a875-ca2ad24d01d5'
@@ -16,7 +17,7 @@ headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
 
 body = {'grant_type':'client_credentials',
         'user_id':'269118732',
-        'user_site':'https://uk1.aconex.co.uk'}
+        'user_site':env}
 
 response = requests.post(LOBBYURL, headers=headers, params=body)
 print(str(response.status_code) + " " + response.reason)

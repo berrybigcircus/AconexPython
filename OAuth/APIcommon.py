@@ -90,7 +90,25 @@ class Project():
         else:
             return ""
 
+    #list the RFI mail types that are valid for this project, that can start a RFI thread
+    def getRFISetup(self ) -> list[str]:
+        match self.__projectCode:
+            case "TEST":
+                return ["Request For Information", "Tender RFI"] #for EA1 testing
+            case "CDC":
+                return ["Sub-Contractor RFI", "Request For Information"]
+            case "LEU":
+                return ["Contractor RFI"]
+            case "A5057":
+                return ["Sub-Contractor RFI", "Client RFI", "Request For Information"]
+            case _: #else
+                return []
+
+
 def projectSelection(debug: bool = False) -> Project:
+    if debug:
+        return Project("HB Test", "1879048648","TEST")
+
     ##Ask for project
     try:
         fp = open("../getAllProjects/projectList.txt", "rb")  # load stored projects
@@ -101,27 +119,26 @@ def projectSelection(debug: bool = False) -> Project:
         exit()
 
     print("CURRENT PROJECTS:")
-    for i, (pName, pID) in enumerate(projectsList.items()):  # print projects to user
-        print("    %d - %s (%s)" % (i, pName, pID))
+    for i, pID in enumerate(projectsList.keys()):  # print projects to user
+        print("    %d - %s %s (%s)" % (i, projectsList[pID][1], projectsList[pID][0], pID))
 
     confirm = "n"
     projectname : str
     chosenProjectID : str
 
-    if debug == True:
-        projectname = "HB Test"
-        chosenProjectID = "1879048648"
-        confirm = "Y"
-
     while confirm.upper() != "Y" and confirm.lower() != "yes":
         projectIndex = indexInput(len(projectsList) - 1)
-        print("Project - %s" % list(projectsList)[projectIndex])
+        chosenProjectID = list(projectsList.keys())[projectIndex]
+        projDetails = list(projectsList.values())[projectIndex]
+        projectname, projectcode = projDetails
+
+        print(projectcode)
+
+        print("Project - %s" % projectname)
 
         confirm = input("Confirm (Y/N):")
-        chosenProjectID = list(projectsList.values())[projectIndex]
-        projectname = list(projectsList)[projectIndex]
 
-    return Project(projectname, chosenProjectID)
+    return Project(projectname, chosenProjectID, projectcode)
 
 
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection

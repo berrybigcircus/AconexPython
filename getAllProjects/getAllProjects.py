@@ -25,11 +25,12 @@ def main(bearer):
 
     projectList = dict()
 
-    for project in ET.fromstring(xml.strip()).findall(".//Project[@Hidden='false']"): #find visible projects only (assume hidden aren't getting new users added to)
-        name = project.find('ProjectShortName').text
+    for project in ET.fromstring(xml.strip()).findall(".//Project[@Hidden='false']"): #find visible projects only
+        pname = project.find('ProjectShortName').text
         pid = project.find('ProjectId').text
+        pcode = project.find('ProjectCode').text #the only issue is on old projects where the code isn't loaded in properly, but should be ok
 
-        projectList[name] = pid
+        projectList[pid] = [pname, pcode]
 
     fp = open("projectList.txt","wb")
     print(projectList)

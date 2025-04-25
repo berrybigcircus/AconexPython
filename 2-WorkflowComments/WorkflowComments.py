@@ -103,7 +103,7 @@ def exportToExcel():
                            index=False) #no index col
     print("     Workflow data added to ExportedData.xlsx")
 
-def main(passedBearer, env, project: Project):
+def main(passedBearer, env, project: Project, inputUseTextFile : str):
     global bearer
     bearer = passedBearer
     global aconexEnv
@@ -114,10 +114,10 @@ def main(passedBearer, env, project: Project):
     global PROJECTURL
     PROJECTURL = "https://api.aconex.com/api/projects/" + chosenProjectID  # url of the chosen project (using project id)
 
-    inputUseTextFile : str = input("Generate from docsList.txt? (Y/N): ").lower()
     if inputUseTextFile == "y":
         genTrackerTextFile()
     else:
+        print("Generating a tracker for all documents " + projectname)
         #Generate a tracker for ALL documents
         wfReviewsXml = getAllWorkflows()
         addWorkflowData(wfReviewsXml)

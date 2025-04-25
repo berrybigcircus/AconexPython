@@ -1,3 +1,7 @@
 ##Enter user emails / full names below, on separate lines:
-bob@banana.com
-Charlotte Newgent
+Mike Aston
+Robert Brough
+Anil Parmar
+Michael Touhey
+Richard Perkins
+Stuart Bailey

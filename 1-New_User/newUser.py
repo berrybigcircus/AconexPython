@@ -9,6 +9,8 @@ import webbrowser
 import datetime
 import pandas
 
+from OAuth.APIcommon import projectSelection, Project, session
+
 ORGFILTERENDS = ["Ltd", "Limited", "LLC", "Inc", "Pty", "Pte", "Pvt"]  # remove these from the organisation name when creating/searching for company mailing group
 ORGFILTERSTARTS = ["The"]
 
@@ -144,6 +146,7 @@ def addUserstoMG(mgID, usersToAdd):
     return response.status_code, response.reason
 
 def addToGroup(userData):
+    session.cache.clear()
     jsonMG = getMailingGroups()
 
     for dirUser in userData: #must check each user's org
@@ -157,10 +160,11 @@ def addToGroup(userData):
             orgWords = orgWords[:-1]
         filteredOrgName = " ".join(orgWords)
         regSearch = ".*" + filteredOrgName + ".*"
-        mgID, mgUsers = findMailingGroup(jsonMG, filteredOrgName)
+        mgID, mgUsers = findMailingGroup(jsonMG, regSearch)
 
         if mgID == 0: #Group not found
             mgID, mgUsers = createMailingGroup(filteredOrgName)
+            session.cache.clear()
             jsonMG = getMailingGroups() #need to refresh MG list
 
         if userID not in mgUsers:
@@ -188,7 +192,7 @@ def draftTransmittal(userData):
     response = requests.get(url, headers=headers)
     xml = response.text
 
-    searchXml = ET.fromstring(xml.strip()).find('SearchResults/')
+    searchXml = ET.fromstring(xml.strip()).findall('SearchResults/')
     docIds = [doc.attrib['DocumentId'] for doc in searchXml]
     userIds = [dirUser.find("UserId").text for dirUser in userData]
 
@@ -215,7 +219,7 @@ def draftTransmittal(userData):
     returnedXml = response.text
     draftedMailId = ET.fromstring(returnedXml.strip()).find('NewMailId').text
 
-    draftMailURL = aconexEnv + "/rsrc/20241028.0419/en_AU_DOC/mail/view/index.html#/" + chosenProjectID + "/" + draftedMailId
+    draftMailURL = aconexEnv + "/rsrc/20250422.1347/en_AU_DOC/mail/view/index.html#/" + chosenProjectID + "/" + draftedMailId
     print ("Draft transmittal created. Opening link...")
     webbrowser.open(draftMailURL)
 
@@ -247,7 +251,7 @@ def addWorkingDays(startdate, daysToAdd): #fcking can't believe i have to includ
     
     return currentdate
 
-def sendProjectInvite(userData):
+def draftProjectInvite(userData):
     #get the project invite drafts that have been pre-made
     parameters = {"search_type": "PAGED",
               "mail_box": "draftbox",
@@ -281,7 +285,7 @@ def sendProjectInvite(userData):
         return
     
     #create mail
-    url = PROJECTURL + "/mail"
+    url = PROJECTURL + "/mail?is_draft=true"
     headers = {'Authorization': bearer,
                 'Content-Type': 'multipart/mixed',
                 'boundary': 'myboundary'}
@@ -310,43 +314,25 @@ def sendProjectInvite(userData):
 
     response = requests.post(url, headers=headers, data=xmlData)
     if response.status_code != 200:
-        print("There was an error creating the project invite mail. %s" % response.reason)
+        print("There was an error drafting the project invite mail. %s" % response.reason)
         return
-    
-    print("The project invite has been sent successfully.")
 
-def main(passedBearer, env):
+    returnedXml = response.text
+    draftedMailId = ET.fromstring(returnedXml.strip()).find('NewMailId').text
+
+    draftMailURL = aconexEnv + "/rsrc/20250422.1347/en_AU_DOC/mail/view/index.html#/" + chosenProjectID + "/" + draftedMailId
+    print("Draft project invite created. Opening link...")
+    webbrowser.open(draftMailURL)
+
+def main(passedBearer, env, project: Project=projectSelection()):
     global bearer
     bearer = passedBearer
     global aconexEnv
     aconexEnv = env
-    ##Ask for project
-    try:
-        fp = open("../getAllProjects/projectList.txt", "rb") #load stored projects
-        projectsList = pickle.load(fp) #load as project dictionary
-        fp.close()
-    except:
-        print("Error loading project list.")
-        exit()
 
-    print("CURRENT PROJECTS:")
-    for i, (pName, pID) in enumerate(projectsList.items()): #print projects to user
-        print("    %d - %s (%s)" % (i, pName, pID))
-
-    debug = True #### <--- TODO
-    confirm = "n"
+    global projectname
     global chosenProjectID
-
-    if debug == True:
-        chosenProjectID = "1879048648"
-        confirm = "Y"
-
-    while confirm.upper() != "Y" and confirm.lower() != "yes":
-        projectIndex = indexInput(len(projectsList)-1)
-        print("Project - %s" % list(projectsList)[projectIndex])
-        
-        confirm = input("Confirm (Y/N):")
-        chosenProjectID = list(projectsList.values())[projectIndex]
+    projectname, chosenProjectID = project.getProject()
 
     global PROJECTURL
     PROJECTURL = "https://api.aconex.com/api/projects/" + chosenProjectID #url of the chosen project (using project id)
@@ -407,9 +393,9 @@ def main(passedBearer, env):
     if confirm.upper() == "Y" or confirm.lower() == "yes": transmittalSent = draftTransmittal(userData)
     else: transmittalSent = False
 
-    ##Send Project Invite Mail
-    confirm = input("Send project invite? (Y/N): ")
-    if confirm.upper() == "Y" or confirm.lower() == "yes": sendProjectInvite(userData)
+    ##Draft Project Invite Mail
+    confirm = input("Draft project invite? (Y/N): ")
+    if confirm.upper() == "Y" or confirm.lower() == "yes": draftProjectInvite(userData)
 
     ##TODO Update the new users tracker
     #updateTracker("HB Test", userData)
