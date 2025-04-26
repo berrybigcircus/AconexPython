@@ -23,17 +23,17 @@ workflowData = {
 
 EXPORTFNAME = 'ExportedData.xlsx' #workbook to place the raw data into
 
-def searchForDoc(docNumber) -> Element | None:
-    searchTerm = "docno:" + docNumber
+def searchForDoc(docTrackingID) -> Element | None:
+    searchTerm = "trackingid:" + docTrackingID
     parameters = {"search_type": "PAGED",  # PAGED, meaning return results by "pages" of variable size.
-                  "return_fields": "trackingid,docno,title,revision,reviewstatus,reviewSource", #use the tracking id because the doc no might change
+                  "return_fields": "trackingid,docno,title,revision,reviewstatus,reviewSource",
                   "search_query": searchTerm
                   }
 
     headers = {'Authorization': bearer}
     url = PROJECTURL + "/register?" + urlencode(parameters)
 
-    xml = getAPIResponse(url, headers, "searching for document " + docNumber)
+    xml = getAPIResponse(url, headers, "searching for document " + docTrackingID)
     docXml = ElTree.fromstring(xml.strip()).find('SearchResults/') #there is only one doc returned so can use find rather than findall
     return docXml
 
@@ -48,7 +48,11 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
     prevnum = None
 
     for reviewXml in wfReviewsXml: #in case it's been in multiple reviews
-        docnum = reviewXml.find('DocumentNumber').text
+        #we need to run this every time because we need to know the doc's current doc number, not what it was in the WF - this is in case the number changes (WISBECH)
+        docTrackingID = reviewXml.find('DocumentTrackingId').text
+        docxml = searchForDoc(docTrackingID)
+
+        docnum = docxml.find('DocumentNumber').text
         if prevnum is not None and docnum != prevnum:
             currentRev = ""
         wfstatus = reviewXml.find('WorkflowStatus').text
@@ -73,7 +77,6 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
         workflowData["Comments"].append(reviewXml.find('Comments').text)
 
         if currentRev == "":
-            docxml = searchForDoc(docnum)
             currentRev = docxml.find('Revision').text if docxml is not None else ""
         workflowData["Latest revision?"].append(docRev == currentRev)
         prevnum = docnum
