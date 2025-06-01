@@ -1,17 +1,15 @@
 import json
-import requests
-import pickle
 import datetime
 from base64 import b64encode
 
 import requests_cache
-session = requests_cache.CachedSession('test', expire_after=60)
+
+session = requests_cache.CachedSession('test', expire_after=600)
 
 #For setting up
 def basic_auth(username, password):
     token = b64encode(f'{username}:{password}'.encode('utf-8')).decode('ascii')
     return f'Basic {token}'
-
 
 def jprint(obj):
     # create a formatted string of the Python JSON object
@@ -50,13 +48,19 @@ def postAPIResponse(url, headers, body, explanation) -> str:
     return response.text
 
 #Specific functions
-def convertDateTime(dateResponseRaw : str, format : str) -> str:
+def convertDateTimeStr(dateResponseRaw : str, format : str) -> str:
     if dateResponseRaw:
         date = datetime.datetime.strptime(dateResponseRaw, "%Y-%m-%dT%H:%M:%S.%fZ")
         return datetime.datetime.strftime(date, format)
 
     else:
         return ""
+
+def convertToDateTime(dateResponseRaw : str) -> datetime.datetime:
+    if dateResponseRaw:
+        return datetime.datetime.strptime(dateResponseRaw, "%Y-%m-%dT%H:%M:%S.%fZ")
+    else:
+        return None
 
 def indexInput(maxVal):
     valid = False
@@ -74,71 +78,6 @@ def indexInput(maxVal):
             continue
 
         return chosenIndex
-
-class Project():
-    def __init__(self, pname: str, pID: str, pCode: str = None):
-        self.__projectname = pname
-        self.__projectID = pID
-        self.__projectCode = pCode
-
-    def getProject(self) -> (str, str):
-        return self.__projectname, self.__projectID
-
-    def projectCodePrefix(self) -> str:
-        if self.__projectCode:
-            return self.__projectCode + " - "
-        else:
-            return ""
-
-    #list the RFI mail types that are valid for this project, that can start a RFI thread
-    def getRFISetup(self ) -> list[str]:
-        match self.__projectCode:
-            case "TEST":
-                return ["Request For Information", "Tender RFI"] #for EA1 testing
-            case "CDC":
-                return ["Sub-Contractor RFI", "Request For Information"]
-            case "LEU":
-                return ["Contractor RFI"]
-            case "A5057":
-                return ["Sub-Contractor RFI", "Client RFI", "Request For Information"]
-            case _: #else
-                return []
-
-
-def projectSelection(debug: bool = False) -> Project:
-    if debug:
-        return Project("HB Test", "1879048648","TEST")
-
-    ##Ask for project
-    try:
-        fp = open("../getAllProjects/projectList.txt", "rb")  # load stored projects
-        projectsList = pickle.load(fp)  # load as project dictionary
-        fp.close()
-    except IOError:
-        print("Error loading project list.")
-        exit()
-
-    print("CURRENT PROJECTS:")
-    for i, pID in enumerate(projectsList.keys()):  # print projects to user
-        print("    %d - %s %s (%s)" % (i, projectsList[pID][1], projectsList[pID][0], pID))
-
-    confirm = "n"
-    projectname : str
-    chosenProjectID : str
-
-    while confirm.upper() != "Y" and confirm.lower() != "yes":
-        projectIndex = indexInput(len(projectsList) - 1)
-        chosenProjectID = list(projectsList.keys())[projectIndex]
-        projDetails = list(projectsList.values())[projectIndex]
-        projectname, projectcode = projDetails
-
-        print(projectcode)
-
-        print("Project - %s" % projectname)
-
-        confirm = input("Confirm (Y/N):")
-
-    return Project(projectname, chosenProjectID, projectcode)
 
 
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection

@@ -1,12 +1,14 @@
-from OAuth import UK1setup
-from OAuth.APIcommon import projectSelection, Project
+from OAuth import UK1setup, EAsetup
+from OAuth.config import init
+from OAuth.ProjectClasses import Project, projectSelection
 
 import WorkflowComments
 
-#WorkflowComments.main(UK1setup.bearer,'https://uk1.aconex.co.uk', projectSelection(),
-# inputUseTextFile=input("Generate from docsList.txt? (Y/N): ").lower())  #pass in environment, for urls)
+#init(UK1setup.bearer, UK1setup.env, projectSelection())
+#WorkflowComments.main(inputUseTextFile=input("Generate from docsList.txt? (Y/N): ").lower())
 
 #WFS Wisbech
-WorkflowComments.main(UK1setup.bearer,'https://uk1.aconex.co.uk',
-                      Project('FS1018 DfE Wisbech Free School', '268454433', "WFS"),
-                      inputUseTextFile="n")  #pass in environment, for urls)
+init(UK1setup.bearer, UK1setup.env, Project('FS1018 DfE Wisbech Free School', '268454433', "WFS"))
+WorkflowComments.main(inputUseTextFile="n")
+
+

@@ -9,7 +9,8 @@ import webbrowser
 import datetime
 import pandas
 
-from OAuth.APIcommon import projectSelection, Project, session
+from OAuth.APIcommon import session, getAPIResponse, postAPIResponse
+from OAuth.ProjectClasses import Project, projectSelection
 
 ORGFILTERENDS = ["Ltd", "Limited", "LLC", "Inc", "Pty", "Pte", "Pvt"]  # remove these from the organisation name when creating/searching for company mailing group
 ORGFILTERSTARTS = ["The"]
@@ -19,13 +20,13 @@ def directorySearch(parameters):
     url = PROJECTURL + "/directory?" + urlencode(parameters)
     headers = {'Authorization': bearer}
     
-    xml = getResponse(url, headers, "searching the directory")
+    xml = getAPIResponse(url, headers, "searching the directory")
     root = ET.fromstring(xml)
 
     numusersFound = int(root.attrib['TotalResults'])
     
     if numusersFound == 0:
-        print("No users found on this project with those details.")
+        print("No users found on this project with those details. Skipping...")
         return ""
     elif numusersFound > 1:
         print("%d results found:" % numusersFound)
@@ -39,15 +40,6 @@ def directorySearch(parameters):
         return toFind[userIndex]
     else:
         return root.find('SearchResults/Directory') #return singular user
-
-def getResponse(url, headers, explanation):
-    response = requests.get(url, headers=headers)
-
-    #validate get request
-    if response.status_code != 200:
-        print("There was an error %s. %d %s" % (explanation, response.status_code, response.reason))
-        exit()
-    return response.text
 
 def indexInput(maxVal):
     valid = False
@@ -67,9 +59,10 @@ def indexInput(maxVal):
         return chosenIndex
 
 def getMailingGroups():
-    url = "https://api.aconex.com/api/mailinggroups/" + chosenProjectID #they structured the url different for no reason
+    session.cache.clear()
+    url = aconexEnv + "/api/mailinggroups/" + projectObj.projectID() #they structured the url different for no reason
     headers = {'Authorization': bearer}
-    mgResponse = getResponse(url, headers, "finding mailing groups") #it returns some json garbo not xml
+    mgResponse = getAPIResponse(url, headers, "finding mailing groups") #it returns some json garbo not xml
     jsonMG = json.loads(mgResponse)
 
     return jsonMG
@@ -90,21 +83,18 @@ def findMailingGroup(jsonMG, regSearch):
     return mgID, mgUsers
 
 def createMailingGroup(groupName):
-    url = "https://api.aconex.com/api/mailinggroups/" + chosenProjectID
+    url = aconexEnv + "/api/mailinggroups/" + projectObj.projectID()
     headers = {'Authorization': bearer}
     #Create All mailing group
     jsonData = {"groups": [{
         "groupName": groupName,
         "isLocked": "false"
         }]}
-    response = requests.post(url, headers=headers, json=jsonData) #use same url
-
-    if response.status_code != 201: #if not successfully created
-        print("The group %s wasn't found and there was an error creating it. %s" % (groupName, response.reason))
-        exit()
+    response = postAPIResponse(url=url, headers=headers, body=jsonData, explanation="creating mailing group")
 
     print("'%s' mailing group created." % groupName)
-    mgResponse = getResponse(url, headers, "finding mailing groups") #it doesn't return the id of the new group, so have to run the get again
+    session.cache.clear()
+    mgResponse = getAPIResponse(url, headers, "finding mailing groups") #it doesn't return the id of the new group, so have to run the get again
     jsonMG = json.loads(mgResponse)
 
     searchTerm = "^" + groupName + "$" #should be able to search exact for any mailing group as it was just created with this name
@@ -134,7 +124,7 @@ def addToAll(userData):
         print("Users added to 'All' mailing group successfully.")
 
 def addUserstoMG(mgID, usersToAdd):
-    url = "https://api.aconex.com/api/mailinggroups/" + chosenProjectID + "/addUsers"
+    url = aconexEnv + "/api/mailinggroups/" + projectObj.projectID() + "/addUsers"
     headers = {'Authorization': bearer}
     jsonData = {"addOrRemoveUsersGroupRequest": [{
                     "groupId": mgID,
@@ -183,16 +173,25 @@ def draftTransmittal(userData):
     HBDCALLDOCS = "matchAll:1 confidential:0 AND NOT (SharedWith_singleSelect:Internal* OR SharedWith_singleSelect:Shared*)" #manual recreation of this search
     parameters = {"search_type": "PAGED", #PAGED, meaning return results by "pages" of variable size.
                   "return_fields": "docno,title,doctype,confidential,SharedWith_singleSelect", 
-                  "search_query": HBDCALLDOCS
+                  "search_query": HBDCALLDOCS,
+                  "page_size": "500"
                   } 
 
     headers = {'Authorization': bearer}
     url = PROJECTURL + "/register?" + urlencode(parameters)
 
-    response = requests.get(url, headers=headers)
-    xml = response.text
+    xml = getAPIResponse(url, headers, "searching document register")
 
     searchXml = ET.fromstring(xml.strip()).findall('SearchResults/')
+    totalPages: int = int(ET.fromstring(xml.strip()).get('TotalPages'))
+
+    currentPageNum = 1
+    while currentPageNum < totalPages:
+        url = PROJECTURL + "/register?" + urlencode(parameters) + "&page_number=" + str(currentPageNum)
+        xml = getAPIResponse(url, headers, "searching document register")
+        searchXml.extend(ET.fromstring(xml.strip()).findall('SearchResults/'))
+        currentPageNum += 1
+
     docIds = [doc.attrib['DocumentId'] for doc in searchXml]
     userIds = [dirUser.find("UserId").text for dirUser in userData]
 
@@ -219,7 +218,7 @@ def draftTransmittal(userData):
     returnedXml = response.text
     draftedMailId = ET.fromstring(returnedXml.strip()).find('NewMailId').text
 
-    draftMailURL = aconexEnv + "/rsrc/20250422.1347/en_AU_DOC/mail/view/index.html#/" + chosenProjectID + "/" + draftedMailId
+    draftMailURL = aconexEnv + "/rsrc/20250422.1347/en_AU_DOC/mail/view/index.html#/" + projectObj.projectID() + "/" + draftedMailId
     print ("Draft transmittal created. Opening link...")
     webbrowser.open(draftMailURL)
 
@@ -256,7 +255,7 @@ def draftProjectInvite(userData):
     parameters = {"search_type": "PAGED",
               "mail_box": "draftbox",
               "return_fields": "docno,subject,responsedate,attachedDocumentCount",
-              "search_query": "corrtypeid:1879048551" #get project invite mail types only
+              "search_query": "corrtypeid:" + projectObj.getProjectInviteMailID() #get project invite mail types only
               }
 
     url = PROJECTURL + "/mail?" + urlencode(parameters)
@@ -301,6 +300,7 @@ def draftProjectInvite(userData):
     resDate = addWorkingDays(datetime.datetime.now(datetime.timezone.utc), 2)
     resDate = resDate.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     xmlData = xmlData.replace("RESPONSE_REQ_DATE_HERE", str(resDate))
+    xmlData = xmlData.replace("MAILID_GOES_HERE", projectObj.getProjectInviteMailID())
     
     mBody = "<![CDATA[" + draftMailXML.find('MailData').text + "]]>"
     xmlData = xmlData.replace("MAIL_BODY_HERE", mBody)
@@ -320,22 +320,21 @@ def draftProjectInvite(userData):
     returnedXml = response.text
     draftedMailId = ET.fromstring(returnedXml.strip()).find('NewMailId').text
 
-    draftMailURL = aconexEnv + "/rsrc/20250422.1347/en_AU_DOC/mail/view/index.html#/" + chosenProjectID + "/" + draftedMailId
+    draftMailURL = aconexEnv + "/rsrc/20250422.1347/en_AU_DOC/mail/view/index.html#/" + projectObj.projectID() + "/" + draftedMailId
     print("Draft project invite created. Opening link...")
     webbrowser.open(draftMailURL)
 
-def main(passedBearer, env, project: Project=projectSelection()):
+def main(passedBearer, env, project: Project=projectSelection(False)):
     global bearer
     bearer = passedBearer
     global aconexEnv
     aconexEnv = env
 
-    global projectname
-    global chosenProjectID
-    projectname, chosenProjectID = project.getProject()
+    global projectObj
+    projectObj = project
 
     global PROJECTURL
-    PROJECTURL = "https://api.aconex.com/api/projects/" + chosenProjectID #url of the chosen project (using project id)
+    PROJECTURL = "https://api.aconex.com/api/projects/" + projectObj.projectID() #url of the chosen project (using project id)
 
     ##Get the users to search for using the input text file
     EMAILREGEX = r"\S+@\S+\.\S+"
@@ -347,6 +346,7 @@ def main(passedBearer, env, project: Project=projectSelection()):
 
     valid = True #if all the inputs are valid
     userData = []
+    skippedusers = []
 
     for iLine in textLines:
         emailsFound = re.findall(EMAILREGEX,iLine)
@@ -360,6 +360,8 @@ def main(passedBearer, env, project: Project=projectSelection()):
           parameters = {"email": emailsFound[0],
                         "show_groups": "false"} #don't return mailing groups it breaks it
 
+          tempname = parameters["email"]
+
         else: #a name rather than an email
             names = iLine.split(" ") #split forename / surname
             surname = names[-1] #last val
@@ -368,17 +370,16 @@ def main(passedBearer, env, project: Project=projectSelection()):
             parameters = {"given_name": forename,
                           "family_name": surname,
                           "show_groups": "false"} #don't return mailing groups it breaks it
+            tempname = names
 
         userXML = directorySearch(parameters)
-        if userXML == "":
-            valid = False
-            break
-        else:
+
+        if userXML != "":
+            #skip invalid user
             userData.append(userXML)
 
-    if valid == False: #if any of the users were invalid, end program
-        exit()
-
+        else:
+            skippedusers.append(tempname)
 
     ##Add to All Mailing Group
     confirm = input("Add all users to 'All' Mailing Group? (Y/N): ")
@@ -397,10 +398,14 @@ def main(passedBearer, env, project: Project=projectSelection()):
     confirm = input("Draft project invite? (Y/N): ")
     if confirm.upper() == "Y" or confirm.lower() == "yes": draftProjectInvite(userData)
 
+    print("SUMMARY")
+    print("Success on: " + "\n".join([user.find('UserName').text for user in userData]))
+    print("Skipped: " + "\n".join(skippedusers))
+
     ##TODO Update the new users tracker
     #updateTracker("HB Test", userData)
 
-def updateTracker(projectName, userData):
+def updateTracker(projectname, userData):
     trackerDF = pandas.read_excel("Aconex Dummy New Users Tracker.xlsx", sheet_name="Tracker")
 
     print(trackerDF["Project"])

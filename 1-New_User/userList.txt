@@ -1,7 +1,2 @@
 ##Enter user emails / full names below, on separate lines:
-Mike Aston
-Robert Brough
-Anil Parmar
-Michael Touhey
-Richard Perkins
-Stuart Bailey
+Sam Wheeler

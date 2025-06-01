@@ -4,7 +4,7 @@ Content-Type: application/vnd.aconex.mail.v3+xml
 <Mail>
 TO_USERS_GO_HERE
 <MailSubject>SUBJECT_GOES_HERE</MailSubject>
-<MailTypeId>1879048551</MailTypeId>
+<MailTypeId>MAILID_GOES_HERE</MailTypeId>
 <RichMailText>true</RichMailText>
 <TotalAttachmentCount>ATTACHMENT_COUNT_GOES_HERE</TotalAttachmentCount>
 <ResponseRequired>8</ResponseRequired>

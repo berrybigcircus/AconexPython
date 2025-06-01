@@ -1,5 +1,5 @@
 from OAuth import UK1setup
-from OAuth.APIcommon import projectSelection, Project
+from OAuth.ProjectClasses import Project, projectSelection
 
 import WorkflowComments
 

@@ -6,7 +6,8 @@ from xml.etree.ElementTree import Element
 
 import pandas  # for exporting to excel
 
-from OAuth.APIcommon import getAPIResponse, convertDateTime, projectSelection, Project
+from OAuth.APIcommon import getAPIResponse, convertDateTimeStr
+import OAuth.config as config
 
 workflowData = {
     "Document Number": [],
@@ -18,22 +19,22 @@ workflowData = {
     "Step Outcome": [],
     "Date of Comments": [],
     "Comments": [],
-    "Latest revision?": []
+    "Workflow Outcome": [],
+    "Latest revision?": [],
 }
 
 EXPORTFNAME = 'ExportedData.xlsx' #workbook to place the raw data into
 
-def searchForDoc(docTrackingID) -> Element | None:
-    searchTerm = "trackingid:" + docTrackingID
+def searchForDoc(searchTerm : str) -> Element | None:
     parameters = {"search_type": "PAGED",  # PAGED, meaning return results by "pages" of variable size.
                   "return_fields": "trackingid,docno,title,revision,reviewstatus,reviewSource",
                   "search_query": searchTerm
                   }
 
-    headers = {'Authorization': bearer}
-    url = PROJECTURL + "/register?" + urlencode(parameters)
+    headers = {'Authorization': config.bearer()}
+    url = config.projecturl() + "/register?" + urlencode(parameters)
 
-    xml = getAPIResponse(url, headers, "searching for document " + docTrackingID)
+    xml = getAPIResponse(url, headers, "searching for document " + searchTerm)
     docXml = ElTree.fromstring(xml.strip()).find('SearchResults/') #there is only one doc returned so can use find rather than findall
     return docXml
 
@@ -45,16 +46,19 @@ def searchForWorkflow(wfReviewsXml, trackingId) -> list[Any]:
     return wfReviewsXml
 
 def addWorkflowData(wfReviewsXml, currentRev=""):
-    prevnum = None
+    prevID = None
+    docreviewoutcome = ""
 
     for reviewXml in wfReviewsXml: #in case it's been in multiple reviews
-        #we need to run this every time because we need to know the doc's current doc number, not what it was in the WF - this is in case the number changes (WISBECH)
         docTrackingID = reviewXml.find('DocumentTrackingId').text
-        docxml = searchForDoc(docTrackingID)
 
-        docnum = docxml.find('DocumentNumber').text
-        if prevnum is not None and docnum != prevnum:
-            currentRev = ""
+        #we need to run this every time because we need to know the doc's current doc number, not what it was in the WF - this is in case the number changes (WISBECH)
+        if prevID is None or docTrackingID != prevID:
+            docxml = searchForDoc("trackingid:" + docTrackingID)
+            docnum = docxml.find('DocumentNumber').text if docxml else reviewXml.find('DocumentNumber').text
+            currentRev = docxml.find('Revision').text if docxml is not None else ""
+            docreviewoutcome = docxml.find('ReviewStatus').text if docxml is not None else ""
+
         wfstatus = reviewXml.find('WorkflowStatus').text
         docRev = reviewXml.find('DocumentRevision').text
         stepstatus = reviewXml.find('StepStatus').text
@@ -70,22 +74,21 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
         #workflowData["WorkflowNumber"].append(reviewXml.find('WorkflowNumber').text)
         workflowData["Revision"].append(docRev)
         workflowData["Workflow Status"].append(wfstatus)
-        workflowData["Date In"].append(convertDateTime(reviewXml.find('DateIn').text,"%d/%m/%Y"))
+        workflowData["Date In"].append(convertDateTimeStr(reviewXml.find('DateIn').text, "%d/%m/%Y"))
         workflowData["Step Name"].append(reviewXml.find('StepName').text)
         workflowData["Step Outcome"].append(stepoutcome)
-        workflowData["Date of Comments"].append(convertDateTime(reviewXml.find('DateCompleted').text,"%d/%m/%Y"))
+        workflowData["Date of Comments"].append(convertDateTimeStr(reviewXml.find('DateCompleted').text, "%d/%m/%Y"))
         workflowData["Comments"].append(reviewXml.find('Comments').text)
 
-        if currentRev == "":
-            currentRev = docxml.find('Revision').text if docxml is not None else ""
+        workflowData["Workflow Outcome"].append(docreviewoutcome)
         workflowData["Latest revision?"].append(docRev == currentRev)
-        prevnum = docnum
+        prevID = docTrackingID
 
 
 def exportToExcel():
     #create sheet to write the project information
     projectinfo = {
-        "Project Name": [projectname],
+        "Project Name": [config.project().projectName()],
         "Date Generated": [datetime.datetime.today().strftime('%d/%m/%Y')]
     }
     dataframe = pandas.DataFrame(data=projectinfo)
@@ -106,36 +109,26 @@ def exportToExcel():
                            index=False) #no index col
     print("     Workflow data added to ExportedData.xlsx")
 
-def main(passedBearer, env, project: Project, inputUseTextFile : str):
-    global bearer
-    bearer = passedBearer
-    global aconexEnv
-    aconexEnv = env
-
-    global projectname
-    projectname, chosenProjectID = project.getProject()
-    global PROJECTURL
-    PROJECTURL = "https://api.aconex.com/api/projects/" + chosenProjectID  # url of the chosen project (using project id)
-
+def main(inputUseTextFile : str):
     if inputUseTextFile == "y":
         genTrackerTextFile()
     else:
-        print("Generating a tracker for all documents " + projectname)
+        print("Generating a tracker for all documents " + config.project().projectName())
         #Generate a tracker for ALL documents
         wfReviewsXml = getAllWorkflows()
         addWorkflowData(wfReviewsXml)
         exportToExcel()
 
 def getAllWorkflows() -> list[Element]:
-    headers = {'Authorization': bearer}
-    url = PROJECTURL + "/workflows?page_size=100000" #can you believe it will let you do 100,000 page size, DOUBT - watch this break
+    headers = {'Authorization': config.bearer()}
+    url = config.projecturl() + "/workflows?page_size=100000" #can you believe it will let you do 100,000 page size, DOUBT - watch this break
     xml = getAPIResponse(url, headers, "getting workflow information") #initial call
     totalPages : int = int(ElTree.fromstring(xml.strip()).get('TotalPages'))
     wfReviewsXml = ElTree.fromstring(xml)
 
     currentPageNum = 1
     while currentPageNum < totalPages:
-        url = PROJECTURL + "/workflows?page_size=100000&page_number=" + str(currentPageNum)
+        url = config.projecturl() + "/workflows?page_size=100000&page_number=" + str(currentPageNum)
         xml = getAPIResponse(url, headers, "getting workflow information (page = %d)" % currentPageNum)
         wfReviewsXml.extend(ElTree.fromstring(xml))
 
@@ -156,7 +149,7 @@ def genTrackerTextFile():
 
     for iLine in textLines:
         #search up the user's doc number
-        docXml = searchForDoc(iLine)
+        docXml = searchForDoc("docno:"+ iLine)
 
         # if 0 search results
         if docXml == None:
