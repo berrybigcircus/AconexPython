@@ -1,9 +1,7 @@
+import csv
 import pickle
-from xml.etree import ElementTree as ET
 
-from OAuth.APIcommon import getAPIResponse, indexInput
-from OAuth.MailClasses import AconexMailType
-
+from OAuth.APIcommon import indexInput
 
 class Project():
     def __init__(self, pname: str, pID: str, pCode: str = None):
@@ -11,7 +9,7 @@ class Project():
         self.__projectID = pID
         self.__projectCode = pCode
 
-        self.__mailTypes : [AconexMailType] = None
+        self.__mailTypes = None
 
     def projectName(self) -> str:
         return self.__projectname
@@ -24,39 +22,6 @@ class Project():
             return self.__projectCode + " - "
         else:
             return ""
-
-    def getMailSchema(self, PROJECTURL, bearer) -> list[AconexMailType]:
-        headers = {'Authorization': bearer,
-                   'Accept': 'application/vnd.aconex.mail.v2+xml'}
-        url = PROJECTURL + "/mail/schema/creation"
-
-        xml = getAPIResponse(url=url, headers=headers, explanation="getting the mail creation schema for the project.")
-        return self.getMailTypes(ET.fromstring(xml.strip()))
-
-    def getMailTypes(self, mailSchemaXML) -> [AconexMailType]:
-        mailTypesXML = mailSchemaXML.find(
-            "./MultiValueSchemaField/./[Identifier='MailTypeId']")  # find the field for mail types
-
-        mailTypesXML = mailTypesXML.findall("SchemaValues/SchemaValue")
-        mailTypes: list[AconexMailType] = []
-
-        for elem in mailTypesXML:
-            typeName = elem.find('Value').text
-
-            m = AconexMailType(typeID=elem.find('Id').text, typeName=typeName)
-            ffLink = elem.find(
-                'Links/Link')  # link to api request that will give you the details for the form fields for that mail type
-            if ffLink is not None:
-                m.getFormFields(ffLink.get('href'))
-            mailTypes.append(m)
-
-        self.__mailTypes = mailTypes
-        return self.__mailTypes
-
-    def getProjectInviteMailID(self) -> str:
-        #Advice mail type is for HB Test
-        projectInviteMail = list(filter(lambda mt : mt.typename() in ["Project Invitation","Advice"], self.__mailTypes))
-        return projectInviteMail[0].corrtypeid()
 
     #list the RFI mail types that are valid for this project, that can start a RFI thread
     def getRFISetup(self ) -> (str, list[str]):
@@ -88,16 +53,40 @@ class Project():
         else: #luckily i always call it discipline nowadays
             return "Discipline"
 
+    #sometimes multiple orgs/people represent the 'client' for example, so it needs to be mapped together for 'ball in court'
+    def getOrgMap(self) -> dict:
+        match self.__projectCode:
+            case "CDC":
+                return {("Meera Mistry", "Arup"):"Client",
+                        ("Mr Ben Bowley", "Leonard Design Architects"):"Client",
+                        ("Mr Rob Wallace", "Meller Ltd."):"Client",
+                        ("Ray Thain", "Nottingham University Hospital Trust"):"Client",
+                        ("Mr Simon Oliver", "Nottingham University Hospital Trust"):"Client",
+                        ("Ms Jo Dicken", "Arup"): "Client",
+                        ("Ms Kate Yeomans", "Arup"): "Client",
+                        ("Liz Chamberlain", "Leonard Design Architects"):"Architect",
+                        ("Ms Robyn Lim", "Leonard Design Architects"):"Architect",
+                        ("Mr Stuart McNash", "Arup"):"C&S Engineer",
+                        ("Mrs Andria Ahmed", "Arup"):"Ignore",
+                        ("Michael Wood", "Arup"):"C&S Engineer",
+                        ("Mr Luke Webster", "Arup"):"C&S Engineer"
+                }
+            case _:
+                return None
 
-def projectSelection(debug: bool = False) -> Project:
-    if debug:
-        return Project("HB Test", "1879048648", "TEST")
+def projectSelection(debug: [] = []) -> Project:
+    if len(debug) > 0:
+        return Project(debug[0], debug[1], debug[2])
 
     ##Ask for project
+    projectsList = {}
     try:
-        fp = open("../getAllProjects/projectList.txt", "rb")  # load stored projects
-        projectsList = pickle.load(fp)  # load as project dictionary
-        fp.close()
+        csvfile = open("../getAllProjects/projectList.csv", "r", newline='')  # load stored projects
+        reader = csv.reader(csvfile, delimiter=',')
+        next(reader) #skip header row
+        for row in reader:
+            projectsList[row[0]] = [row[1], row[2]]
+        csvfile.close()
     except IOError:
         print("Error loading project list.")
         exit()

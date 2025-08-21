@@ -63,6 +63,9 @@ class AconexUser():
         self.__org : str = org
         self.__disttype : str = disttype
 
+    def name(self) -> str:
+        return self.__name
+
     def org(self) -> str:
         return self.__org
 
@@ -251,6 +254,25 @@ class AconexMail():
     def getToOrgs(self) -> [str]:
         return list(set([to.org() for to in self.toUsers if to.wasSentTo()]))
 
+    #get each org the action is with - group client orgs together
+    def getBallInCourt(self) -> [str]:
+        #check if this project has a certain name/org mapping
+        orgMap = config.project().getOrgMap()
+        if orgMap is None:
+                return self.getToOrgs()
+        else:
+            bic = []
+            for to in self.toUsers:
+                name, org = to.name(), to.org()
+                if (name, org) in orgMap:
+                    map = orgMap[(name, org)]
+                    if map != "Ignore": bic.append(map)
+                else:
+                    bic.append(org)
+
+            return list(set(bic))
+
+
     def getDateTimeSent(self) -> str:
         return datetime.strftime(self.__sentdate, "%d/%m/%Y %H:%M")
 
@@ -303,6 +325,10 @@ def getMailTypes(mailSchemaXML) -> list[AconexMailType]:
 
     return mailTypes
 
+def getProjectInviteMailID(mailtypes : list[AconexMailType]) -> str:
+    #Advice mail type is for HB Test
+    projectInviteMail = list(filter(lambda mt : mt.typename() in ["Project Invitation","Advice"], mailtypes))
+    return projectInviteMail[0].corrtypeid()
 
 def getRFIMailTypes(mailTypes : list[AconexMailType]) -> list[AconexMailType]:
     return list(filter(lambda mt: mt.typename() in config.project().getRFISetup()[1], mailTypes))
@@ -349,6 +375,8 @@ def getAllMail(mailTypes : list[AconexMailType]) -> list[dict]:
         thisRow["Discipline(s)"] = rfiMail.getFormFieldVal(config.project().getRFIDiscSetup()) #it might not actually have one if it's a sc rfi, but try anyway
         thisRow["RFI Response"] = "" #nothing for now
         thisRow["Date RFI Responded"] = ""
+        thisRow["Ball in Court"] = ""
+        thisRow["Status"] = "" #for now
         thisRow["Date Closed"] = rfiMail.getClosedOutDate()
 
         #if RFI not replied to
@@ -364,7 +392,7 @@ def getAllMail(mailTypes : list[AconexMailType]) -> list[dict]:
 
 #the ball in court is everyone who it was sent to who hasn't replied, so add a new row for each org
 def getBallInCourt(mail : AconexMail, allRows, thisRow):
-    toOrgs = mail.getToOrgs()
+    toOrgs = mail.getBallInCourt()
     thisRow["Ball in Court"] = toOrgs[0]
 
     #if more than one org, create new rows for each. otherwise just return thisRow with the BoC
@@ -492,6 +520,7 @@ def valQuery(mailno : str) -> str:
     # this is for orgs with no org code, it breaks the search to have two hyphens
     if mailno[0] == "-":
         return "docno:" + mailno[0] + mailno[1:].replace("-","?")
-
+    elif " " in mailno: #if there is a space in the org code, this will also break
+        return "docno:" + mailno.replace(" ", "?")
     else:
         return "docno:" + mailno

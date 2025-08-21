@@ -62,11 +62,14 @@ def convertToDateTime(dateResponseRaw : str) -> datetime.datetime:
     else:
         return None
 
-def indexInput(maxVal):
+def indexInput(maxVal) -> int | None:
     valid = False
 
     while valid == False:
-        userInput = input("Enter index: ")
+        userInput = input("Enter index, or 'X' if none: ")
+
+        if userInput.upper() == "X":
+            return None
 
         if not userInput.isdigit():
             print("Enter a number.")

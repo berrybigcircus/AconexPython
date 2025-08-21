@@ -1,3 +1,4 @@
+import os
 import xml.etree.ElementTree as ElTree  # for parsing xml
 import datetime
 from typing import Any
@@ -22,8 +23,6 @@ workflowData = {
     "Workflow Outcome": [],
     "Latest revision?": [],
 }
-
-EXPORTFNAME = 'ExportedData.xlsx' #workbook to place the raw data into
 
 def searchForDoc(searchTerm : str) -> Element | None:
     parameters = {"search_type": "PAGED",  # PAGED, meaning return results by "pages" of variable size.
@@ -85,28 +84,33 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
         prevID = docTrackingID
 
 
-def exportToExcel():
+def exportToExcel(fname: str):
     #create sheet to write the project information
     projectinfo = {
         "Project Name": [config.project().projectName()],
         "Date Generated": [datetime.datetime.today().strftime('%d/%m/%Y')]
     }
     dataframe = pandas.DataFrame(data=projectinfo)
-    with pandas.ExcelWriter(EXPORTFNAME, mode='a', if_sheet_exists='replace') as writer:
-        dataframe.to_excel(writer,
-                           sheet_name="ProjectInfo",
-                           header= True,
-                           startrow = 0,
-                           index=False) #no index col
+    if os.path.exists(fname):
+        writer = pandas.ExcelWriter(fname, mode='a', if_sheet_exists="replace")
+    else:
+        writer = pandas.ExcelWriter(fname, mode='w')
+
+    dataframe.to_excel(writer,
+           sheet_name="ProjectInfo",
+           header= True,
+           startrow = 0,
+           index=False) #no index col
 
     # export the comment datas into excel
     dataframe = pandas.DataFrame(data=workflowData)  # convert into pandas data frame for exporting
-    with pandas.ExcelWriter(EXPORTFNAME,mode='a', if_sheet_exists='replace') as writer:
-        dataframe.to_excel(writer,
-                           sheet_name="RawData",
-                           header= True,
-                           startrow = 0,
-                           index=False) #no index col
+    dataframe.to_excel(writer,
+           sheet_name="RawData",
+           header= True,
+           startrow = 0,
+           index=False) #no index col
+
+    writer.close()
     print("     Workflow data added to ExportedData.xlsx")
 
 def main(inputUseTextFile : str):
@@ -117,7 +121,7 @@ def main(inputUseTextFile : str):
         #Generate a tracker for ALL documents
         wfReviewsXml = getAllWorkflows()
         addWorkflowData(wfReviewsXml)
-        exportToExcel()
+        exportToExcel(config.project().projectCodePrefix() + "ExportedData.xlsx")
 
 def getAllWorkflows() -> list[Element]:
     headers = {'Authorization': config.bearer()}
@@ -164,4 +168,4 @@ def genTrackerTextFile():
         docWorkflowsXml = searchForWorkflow(wfReviewsXml, docTrackingID)
         addWorkflowData(docWorkflowsXml, docRevision)
 
-    exportToExcel()
+    exportToExcel(config.project().projectCodePrefix() + "ExportedData.xlsx")

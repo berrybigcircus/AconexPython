@@ -1,4 +1,5 @@
 import datetime
+import os
 
 import pandas
 
@@ -25,8 +26,9 @@ mailData = {
 
 def main():
 
-    filename : str = "RFIs/" + config.project().projectCodePrefix()+"RFI Tracker.xlsx" #for this project, this is where the RFI data is read / written
+    filename : str = "RFIs/" + config.project().projectCodePrefix()+"Exported Data.xlsx" #for this project, this is where the RFI data is read / written
     #importExcel(filename) #TODO - pull these
+
     allRowsDicts : [dict] = getAllMail(getRFIMailTypes(config.mailtypes()))
 
     #convert into one dictionary
@@ -64,20 +66,25 @@ def exportToExcel(filename, mailData):
         "Date Generated": [datetime.datetime.today().strftime('%d/%m/%Y')]
     }
     dataframe = pandas.DataFrame(data=projectinfo)
-    with pandas.ExcelWriter(filename, mode='a', if_sheet_exists='replace') as writer:
-        dataframe.to_excel(writer,
-                           sheet_name="ProjectInfo",
-                           header= True,
-                           startrow = 0,
-                           index=False) #no index col
+    if os.path.exists(filename):
+        writer = pandas.ExcelWriter(filename, mode='a', if_sheet_exists="replace")
+    else:
+        writer = pandas.ExcelWriter(filename, mode='w')
+
+    dataframe.to_excel(writer,
+           sheet_name="ProjectInfo",
+           header= True,
+           startrow = 0,
+           index=False) #no index col
 
     dataframe = pandas.DataFrame(data=mailData)  # convert into pandas data frame for exporting
-    with pandas.ExcelWriter(filename,mode='a', if_sheet_exists='replace') as writer: #just paste over everything, it's easier
-        dataframe.to_excel(writer,
-                           sheet_name="RawData",
-                           header= True,
-                           startrow = 0,
-                           index=False) #no index col
+    dataframe.to_excel(writer,
+                       sheet_name="RawData",
+                       header=True,
+                       startrow=0,
+                       index=False)  # no index col
+
+    writer.close()
     print("     Mail data added to " + filename)
 
 

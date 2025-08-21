@@ -1,0 +1,16 @@
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Accept-Encoding: gzip, deflate, br, zstd
+Accept-Language: en-GB,en;q=0.9,en-US;q=0.8,ru;q=0.7
+Cache-Control: max-age=0
+Connection: keep-alive
+Host: uk1.aconex.co.uk
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: none
+Sec-Fetch-User: ?1
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0
+sec-ch-ua: "Not;A=Brand";v="99", "Microsoft Edge";v="139", "Chromium";v="139"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Windows"
+Cookie: DSESSIONID=42887EB3ABBD62C4B566FDBBCD6FE823; ak_bmsc=0B5D38D8BA791B58FF2A76C515E8F8EE~000000000000000000000000000000~YAAQsuxlX1RAOoyYAQAAQqlNnhwN1VOYaKPP6Rmkjxss+MWidcH9O+EPptH5bKoUL1tsH51/5VHtODFfsU+2xoESyZwxqUuXs3KMd5uHPMvnPXDz6mDMw7wmeg0F6UqTHW6CWIRnqOsopdd1z/SyfGOm1lV36r7WbO2G4Ir44rtyGQxeXpTlehTAPwH0/F+Rq3YlZxMryOjVWfw9NI4aExgfJdAB9mlaWuFtwHtjrAxtmo9rj+tpsd5rDgt/mcbYEzhpTrAZbHrht60KZ4NB7q3c506oYegN+VBTwI1W2ZREgGsqf69rm2YtmE2Pk3KZ0l0GLbZy8GgeVY6QXl0diq+ekLbMKzOd1M58dsC89kukvR3QXwXPBG4OORqX2op1KCI=; AAS_SESSIONID=095B4D5DFFF2DD5A52C2D16B818A608C; JSESSIONID=babylon-node2tztwbxgadra31x7fw9j7dke7g4728434.babylon-node2; XSRF-TOKEN=51135081F56483F088EB78542D26A677485981AAAC2C2BC6; _hp2_props.3755808175=%7B%22projectId%22%3A268456597%2C%22projectName%22%3A%22QMC%20Endoscopy%22%7D; ASESSIONID=01%2C86400%2C1755092147446%2C269118732%2C8e26713ea23a6aeab9a8b6b9daccc50aca36da2d25fe6779b02c042b1970d213; ASDSESSIONID=01%2C86400%2C1755092147446%2C269118732%2C8e26713ea23a6aeab9a8b6b9daccc50aca36da2d25fe6779b02c042b1970d213; bm_sv=962648CD4B9BB0F14E0DB47DDDE02BFE~YAAQsuxlX+mWQoyYAQAAGoF+nhwcmP6aYQnnXoVtG7xb/yAvTGm8NhgwQMICBK7uGady1nvwG856txsLJSAK4eFBF1t3JA84WFcrwSmaTolF+AnZVz9urn9Dore17iETXvVB+0h9op2MLGTmwqjg6AHEDhBslD4OwczULA5Sh1QN9aE6U7va3eSsFn3d5CpYVDQILMqsiVl4/SkYadYQ0++N43gACgcfBcRVUTNoXKqVqsOnzw5yqfPco1Ujw7ihb0D8gm0atbu13OQ=~1; _hp2_id.3755808175=%7B%22userId%22%3A%228949126518226205%22%2C%22pageviewId%22%3A%224976394354949969%22%2C%22sessionId%22%3A%226831547038634273%22%2C%22identity%22%3A%22269118732%22%2C%22trackerVersion%22%3A%224.0%22%2C%22identityField%22%3Anull%2C%22isIdentified%22%3A1%7D; _hp2_ses_props.3755808175=%7B%22r%22%3A%22https%3A%2F%2Fuk1.aconex.co.uk%2FEditCorrespondence%3FEDIT_ACTION%3D28%26Correspondence_correspondenceTypeID%3D23%26transmittalFromBulkConfirmation%3Dtrue%26DOCCONTROL_SEQUENCE%3D0%22%2C%22ts%22%3A1755005752521%2C%22d%22%3A%22uk1.aconex.co.uk%22%2C%22h%22%3A%22%2Frsrc%2F20250801.1418%2Fen_AU_DOC%2Fmail%2Fview%2Findex.html%22%2C%22g%22%3A%22%23%2F268456598%2F344721387%3FisFromSend%3Dtrue%22%7D

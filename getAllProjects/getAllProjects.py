@@ -1,38 +1,29 @@
-import requests #for making http requests
-import json #for reading json
-from base64 import b64encode
-from urllib.parse import urlencode
+import csv
+
 import xml.etree.ElementTree as ET #for parsing xml
-import re #regex
-import pickle
 
 
-def main(bearer):
+from OAuth import config
+from OAuth.APIcommon import getAPIResponse
+
+
+def main():
     ##Get list of my projects
     url = "https://api.aconex.com/api/projects/"
-    headers = {'Authorization': bearer}
+    headers = {'Authorization': config.bearer()}
 
-    response = requests.get(url, headers=headers)
+    xml = getAPIResponse(url, headers=headers, explanation="getting the list of all projects")
+    print(xml)
 
-    print(str(response.status_code) + " " + response.reason)
-
-    xml = response.text
-
-    ##for testing:
-    ##f = open("xmlTest.txt","r")
-    ##xml = f.read()
-    ##f.close()
-
-    projectList = dict()
+    csvfile = open("projectList.csv", "w", newline = '')
+    writer = csv.writer(csvfile)
+    writer.writerow(["pid", "pname", "pcode"])
 
     for project in ET.fromstring(xml.strip()).findall(".//Project[@Hidden='false']"): #find visible projects only
         pname = project.find('ProjectShortName').text
         pid = project.find('ProjectId').text
         pcode = project.find('ProjectCode').text #the only issue is on old projects where the code isn't loaded in properly, but should be ok
 
-        projectList[pid] = [pname, pcode]
+        writer.writerow([pid, pname, pcode])
 
-    fp = open("projectList.txt","wb")
-    print(projectList)
-    pickle.dump(projectList, fp)
-    fp.close()
+    csvfile.close()
