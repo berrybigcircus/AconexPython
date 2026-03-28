@@ -1,2 +1,0 @@
-##Enter user emails / full names below, on separate lines:
-Sam Wheeler
