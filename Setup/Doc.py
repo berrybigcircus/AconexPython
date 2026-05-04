@@ -1,10 +1,10 @@
 import webbrowser
-from urllib.parse import urlencode
-from xml.etree import ElementTree as ElTree
+from xml.etree import ElementTree as ET
 from xml.etree.ElementTree import Element
 
-from Setup.APIcommon import getAPIResponse
+from Setup.APIcommon import getPages
 from Setup.FormField import AconexFormField
+
 
 class DocFormField(AconexFormField):
     def __init__(self, label, fid, datatype, mandatorystr, value=None):
@@ -20,17 +20,28 @@ class DocFormField(AconexFormField):
         return self.__isSearchable
 
 def searchForDoc(config, searchTerm : str, returnfields : str) -> Element | None:
+    docxml = searchForDocs(config, searchTerm, returnfields)
+    assert (len(docxml)<=1) #allow 0 or 1 results (sometimes there may be 0 if doc is no longer in use)
+    if len(docxml) == 0:
+        return None
+    else:
+        return docxml[0]
+
+
+def searchForDocs(config, searchTerm: str, returnfields: str) -> list[Element] | None:
     parameters = {"search_type": "PAGED",  # PAGED, meaning return results by "pages" of variable size.
                   "return_fields": returnfields,
                   "search_query": searchTerm
                   }
 
     headers = {'Authorization': config.bearer()}
-    url = config.projecturl() + "/register?" + urlencode(parameters)
+    baseurl = config.projecturl() + "/register"
+    docxml = getPages(headers, parameters, baseurl, "searching for documents using term %s" % searchTerm)
 
-    xml = getAPIResponse(url, headers, "searching for document " + searchTerm)
-    docXml = ElTree.fromstring(xml.strip()).find('SearchResults/') #there is only one doc returned so can use find rather than findall
-    return docXml
+    if len(docxml) == 0:
+        config.logger.warning("No documents found using search term %s", searchTerm)
+
+    return docxml
 
 
 def getDocumentLink(env, docid):

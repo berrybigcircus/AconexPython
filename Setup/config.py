@@ -270,4 +270,3 @@ def init(passedBearer, env,  debug=[], token=None):
     else:
         config.create(passedBearer, env, debug, token)
 
-

@@ -3,9 +3,13 @@ import datetime
 import pathlib
 import pickle
 from base64 import b64encode
+from urllib.parse import urlencode
+from xml.etree import ElementTree as ET
+from xml.etree.ElementTree import Element
 
 import pandas
 import requests_cache
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -100,7 +104,7 @@ def indexInput(maxVal, allowedVals : list[str] = None) -> int | str | None:
         userInput = input("Enter index, or 'X' if none: ")
 
         if allowedVals: #separate list of possible input valves
-            if userInput in allowedVals:
+            if userInput.casefold() in allowedVals:
                 return userInput
 
         if userInput.upper() == "X":
@@ -203,7 +207,8 @@ def SelLogIn(config):
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,
                                                    "div[aria-label='Sign in with nicole.millinship@henrybrothers.co.uk work or school account.']"))).click()
         # pick aconex account
-        wait.until(EC.element_to_be_clickable((By.ID, config.project.getMyUserID()))).click()
+        config.debug(config.project().getMyUserID())
+        wait.until(EC.element_to_be_clickable((By.ID, config.project().getMyUserID()))).click()
 
     else:
         #Click 'I Agree'
@@ -235,8 +240,8 @@ def SelLogIn(config):
 
 def loadCookies(config):
     try:
-        FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
-        file = open(FOLDERPATH + "\\logincookies.pkl",
+        FOLDERPATH = config.project().folderroot
+        file = open(FOLDERPATH + "\\Setup\\logincookies.pkl",
                     "rb")
         cookies = pickle.load(file) #dict(line.split(': ', 1) for line in file.read().splitlines())
         file.close()
@@ -253,9 +258,29 @@ def loadCookies(config):
 
 
 def writeCookies(config, cookies):
-    FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
-    file = open(FOLDERPATH + "\\logincookies.pkl",
+    FOLDERPATH = config.project().folderroot
+    file = open(FOLDERPATH + "\\Setup\\logincookies.pkl",
                 "wb")
     pickle.dump(cookies, file)
     file.close()
     config.logger.info("Cookies written to logincookies.pkl")
+
+
+def getPages(headers: dict[str, str], parameters: dict[str, str], baseurl: str, explanation : str) -> list[Element]:
+    parameters["page_number"] = "1"
+    url = "{u}?{p}".format(u=baseurl, p=urlencode(parameters))
+
+    xml = getAPIResponse(url, headers, explanation)
+
+    searchXml = ET.fromstring(xml.strip()).findall('SearchResults/')
+    totalPages: int = int(ET.fromstring(xml.strip()).get('TotalPages'))
+
+    currentPageNum = 1
+    while currentPageNum < totalPages:
+        currentPageNum += 1
+        parameters["pageNumber"] = str(currentPageNum)
+        url = "{u}?{p}".format(u=baseurl, p=urlencode(parameters))
+        xml = getAPIResponse(url, headers, explanation)
+        searchXml.extend(ET.fromstring(xml.strip()).findall('SearchResults/'))
+
+    return searchXml

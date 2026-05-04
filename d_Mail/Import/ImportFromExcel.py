@@ -33,7 +33,7 @@ class MailColumn:
             return 20
         elif self.__datatype == "namelist" or self.__datatype == "filelist":
             return 30
-        elif self.__datatype == "confidential":
+        elif self.__datatype == "confidential" or self.__datatype == "ID":
             return 8
         elif self.__datatype == "html":
             return 80
@@ -136,10 +136,16 @@ class MailColumn:
             config.logger.debug(self.__value)
             return True
 
+        elif self.__datatype == "ID":
+            return not pandas.isna(rowval)
+
 #Universal mail cols
 umailCols : list[MailColumn] = [
+    MailColumn("RowID*", "ID"),
     MailColumn("Mail Number (Leave blank for auto-number)", "SINGLE_LINE_TEXT"),
+    MailColumn("Email EntryID (Leave blank if no email)", "SINGLE_LINE_TEXT"),
     MailColumn("Reply to Mail Number (Leave blank for new thread)", "SINGLE_LINE_TEXT"),
+    MailColumn("Reply to RowID (Use to reply to another imported mail)", "SINGLE_LINE_TEXT"),
     MailColumn("To Names (Separate by semi-colon)*", "namelist"),
     MailColumn("From Name (Leave blank for NM)", "name"),
     MailColumn("CC Names (Separate by semi-colon)", "namelist"),

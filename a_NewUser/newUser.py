@@ -11,16 +11,13 @@ import datetime
 import pandas
 import win32com.client
 
-from Setup.APIcommon import session, getAPIResponse, indexInput, cleanOrgName, SelLogIn, loadCookies, writeCookies
+from Setup.APIcommon import session, getAPIResponse, indexInput, cleanOrgName, SelLogIn, loadCookies, getPages
 from Setup.Mail import getProjectInviteMailID, openDraftLink
 from Setup.Directory import OutlookMail, NewUserEmail, NewOrgEmail, getMailingGroups, findMailingGroup, \
     createMailingGroup
 from Setup.config import config
 
 CSVPATH = r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - Docs\General\#Other Files\Aconex\OrgAdminList.csv"
-
-global FOLDERPATH
-FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
 
 NUTRACKERPATH = r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - #Docs\General\#Other Files\Aconex\Aconex New Users Tracker.xlsm"
 nuTracker = { #the headings of the new user tracker
@@ -101,8 +98,8 @@ def searchForCompany(companyname, usersFilter):
 def globalDirectorySearch(parameters: dict) -> (str, OutlookMail):
     DAYSLIMIT : int = 90
     url = config.env() + "/api/directory?" + urlencode(parameters)
-    # search for users (don't include guests)
-    usersFilter = "SearchResults/Directory[SearchResultType!='GUEST_TYPE']"
+    # search for users, include guests
+    usersFilter = "SearchResults/Directory"
     userXML, _ = directorySearch(url, usersFilter, True)
 
     if userXML is None: #if not in global directory
@@ -156,7 +153,7 @@ def globalDirectorySearch(parameters: dict) -> (str, OutlookMail):
 
     #If in global directory
     else:
-        orgname = userXML.find('OrganizationName').text
+        orgname = userXML.find('TradingName').text #the trading name is what you're actually searching for on the directory screen
         username = userXML.find('UserName').text
 
         helperparams = {"PROJECT_ID": config.project().projectID(),
@@ -304,7 +301,7 @@ def projectDirectorySearch(parameters):
 
     isHB = chosenUser.find("OrganizationName").text == "Henry Brothers" if chosenUser else False
     if isHB:  # if they are in henry brothers, add to HB confidential as well
-        groupid, _ = findMailingGroup(getMailingGroups(), "HB Confidential")
+        groupid, _ = findMailingGroup(getMailingGroups(config), "HB Confidential")
         statuscode, reason = addUserstoMG(groupid,[chosenUser.find("UserId").text])
         if statuscode == 200:
             config.info("Henry Brothers user added to HB Confidential.")
@@ -331,12 +328,13 @@ def directorySearch(url, searchfilter, userSearch=True) -> tuple[ET.Element | No
         if userSearch: #list the different users
             print("%d results found:" % numFound)
             for i, user in enumerate(toFind):
-                print("    %d - %s of %s" % (i, user.find('UserName').text, user.find('OrganizationName').text))
+                is_guest : bool = user.find('SearchResultType').text == "GUEST_TYPE"
+                print("    %d - %s of %s %s" % (i, user.find('UserName').text, user.find('OrganizationName').text, "(GUEST)" if is_guest else ""))
             userIndex = indexInput(len(toFind) - 1)
             if userIndex == 0:
                 return (toFind[userIndex], None)
             else:
-                return None, None if userIndex is None else (toFind[userIndex], None)
+                return (None, None) if userIndex is None else (toFind[userIndex], None)
 
         else: #list the different orgs
             uniqueOrgs = list(set([(user.find('OrganizationId').text, user.find('OrganizationName').text) for user in toFind]))
@@ -433,19 +431,8 @@ def draftTransmittal(userData):
                   } 
 
     headers = {'Authorization': config.bearer()}
-    url = config.projecturl() + "/register?" + urlencode(parameters)
-
-    xml = getAPIResponse(url, headers, "searching document register")
-
-    searchXml = ET.fromstring(xml.strip()).findall('SearchResults/')
-    totalPages: int = int(ET.fromstring(xml.strip()).get('TotalPages'))
-
-    currentPageNum = 1
-    while currentPageNum < totalPages:
-        currentPageNum += 1
-        url = config.projecturl() + "/register?" + urlencode(parameters) + "&page_number=" + str(currentPageNum)
-        xml = getAPIResponse(url, headers, "searching document register")
-        searchXml.extend(ET.fromstring(xml.strip()).findall('SearchResults/'))
+    baseurl = config.projecturl() + "/register"
+    searchXml = getPages(headers, parameters, baseurl, " searching the document register")
 
     docIds = [doc.attrib['DocumentId'] for doc in searchXml]
     userIds = [dirUser.find("UserId").text for dirUser in userData]
@@ -656,7 +643,7 @@ def createProjectDirectory():
         dirCreator["Address"].append("32 Eldon Road, Beeston, Nottingham, NG9 6DZ")
         dirCreator["Email"].append(contact.email())
 
-    createExcel(dirCreator)
+    createExcel(config.project().getProjectDirectoryLocation(), dirCreator)
 
 def createAddress(userXml) -> str:
     addressComb = [userXml.find("OrganizationPostalAddressLine").text,
@@ -712,8 +699,7 @@ def filtercontacts(mycontacts, sfilters, aconexid) -> OutlookContact:
         config.logger.info("Matched on %s" % sfilters[index - 1])
         return OutlookContact(filteredcontacts[0], aconexid)
 
-def createExcel(dirCreator : dict):
-    fname = FOLDERPATH + "\\" + config.project().projectCodePrefix() + "Project Directory.xlsx"
+def createExcel(fname : str, dirCreator : dict):
     dataframe = pandas.DataFrame(data=dirCreator)
     writer = pandas.ExcelWriter(fname, mode='w', engine='xlsxwriter')
     dataframe.to_excel(writer,
@@ -734,6 +720,9 @@ def createExcel(dirCreator : dict):
     config.info("Project directory file created")
 
 def main():
+    global FOLDERPATH
+    FOLDERPATH = "{}\\a_NewUser".format(config.project().folderroot)
+
     ##Get the users to search for using the input text file
     EMAILREGEX = r"\S+@\S+\.\S+"
     USERLINEREGEX = r"(.*)<(\S+@\S+\.\S+)>" #I want: Name <email>

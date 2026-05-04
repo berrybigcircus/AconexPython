@@ -11,6 +11,8 @@ class Project():
 
         self.__mailTypes = None
 
+        self.folderroot = str(pathlib.Path(__file__).parents[1].resolve())
+
     def projectName(self) -> str:
         # sanitise MTP project name
         if self.projectCode() == "MTP":
@@ -82,12 +84,10 @@ class Project():
             return "268481852"
 
     def getMyUserID(self) -> str:
-        if self.__projectID == "1879048648":
+        if self.__projectID == "1879048648": #EA
             return "1879050797"
-        # elif self.__projectCode == "MTP":
-        #     return "269369936"
         else:
-            return "1879050830"
+            return "269118732"
 
     def getEWNSetup(self) -> str:
         match self.__projectCode:
@@ -108,6 +108,17 @@ class Project():
             case _:
                 return ["Int design team"]
 
+    def getRFITrackerLocation(self) -> str:
+        return "{}\\d_Mail\\RFIs\\Trackers\\{}Exported Data.xlsx".format(self.folderroot, self.projectCodePrefix())
+
+    def getMailTemplateLocation(self) -> str:
+        return "{}\\d_Mail\\Import\\{}Mail_Template.xlsx".format(self.folderroot, self.projectCodePrefix())
+
+    def getProjectDirectoryLocation(self) -> str:
+        return "{}\\a_NewUser\\PDirectories\\{}Project Directory.xlsx".format(self.folderroot, self.projectCodePrefix())
+
+    def getPickleLocation(self) -> str:
+        return "{}\\d_Mail\\RFIs\\Pickle\\{}mails.pkl".format(self.folderroot, self.projectCodePrefix())
 
 def projectSelection(debug: [] = []) -> Project:
     if len(debug) > 0:
@@ -128,11 +139,10 @@ def projectSelection(debug: [] = []) -> Project:
     _, projectCodes = zip(*projectsList.values())
 
     while confirm.upper() != "Y" and confirm.lower() != "yes":
-
-        projectIndex = indexInput(len(projectsList) - 1, projectCodes)
+        projectIndex = indexInput(len(projectsList) - 1, list(map(str.casefold, projectCodes)))
 
         if isinstance(projectIndex, str): #if one of allowed project code
-            projectcode = projectIndex
+            projectcode = projectIndex.upper()
             projectIndex = projectCodes.index(projectcode)
 
         chosenProjectID = list(projectsList.keys())[projectIndex]

@@ -42,12 +42,10 @@ mailData = {
 
 def main():
     mailData.update((key, []) for key in mailData) #clear and reset dictionary
-    global FOLDERPATH
-    FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
-    filename : str = FOLDERPATH + "\\Trackers\\" + config.project().projectCodePrefix()+"Exported Data.xlsx" #for this project, this is where the RFI data is read / written
+    exp_filename : str = config.project().getRFITrackerLocation() #for this project, this is where the RFI data is read / written
     #importExcel(filename) #TODO - pull these
 
-    lastrun : datetime.datetime = importLastRun(filename)
+    lastrun : datetime.datetime = importLastRun(exp_filename)
 
     #rfimailtypes = getRFIMailTypes(config.project(), config.mailtypes())
     #mtDict = convertMailTypesToDict(rfimailtypes)
@@ -59,9 +57,9 @@ def main():
             mailData[k].append(v)
 
     print([len(l) for l in mailData.values()])
-    exportToExcel(filename, mailData)
+    exportToExcel(exp_filename, mailData)
 
-    rfipath = FOLDERPATH + "\\Trackers\\" + config.project().projectCodePrefix()+"RFI Tracker.xlsx"
+    rfipath = exp_filename.replace("Exported Data.xlsx", "RFI Tracker.xlsx") #get the finalised tracker not the raw export
 
     if os.path.exists(rfipath):
         uploadRFITracker(rfipath)
@@ -118,13 +116,14 @@ def exportToExcel(filename, mailData):
 
 def getrfithreadnew(loadpickle = False, lastrun : datetime.datetime = None):
     rfimailtypes, rfireplymailtypes = getRFIMailTypes(config.project(), config.mailtypes())
+    pickle_path = config.project().getPickleLocation()
+
     if not lastrun:
         loadpickle = False
 
     if loadpickle:
         try:
-            fpath = FOLDERPATH + "mails.pkl"
-            with open(fpath, "rb") as f:
+            with open(pickle_path, "rb") as f:
                 rfimails = pickle.load(f)
             f.close()
             config.logger.info("Loaded pickle")
@@ -141,7 +140,7 @@ def getrfithreadnew(loadpickle = False, lastrun : datetime.datetime = None):
             #filter to one amail per reference number to avoid a duplicate row (by converting to dict then back again)
             rfimails = {mail.refno:mail for mail in rfimails}.values()
 
-            with open(fpath, "wb") as f:
+            with open(pickle_path, "wb") as f:
                 pickle.dump(rfimails, f)
                 config.logger.info("Mails dumped to pickle file")
 
@@ -153,8 +152,7 @@ def getrfithreadnew(loadpickle = False, lastrun : datetime.datetime = None):
 
     if not loadpickle:
         rfimails: list[AconexMail] = list(filter(lambda m: not m.isVoid(), getAllMail(config, rfimailtypes)))
-        fpath = FOLDERPATH + "mails.pkl"
-        with open(fpath, "wb") as f:
+        with open(pickle_path, "wb") as f:
             pickle.dump(rfimails, f)
             config.logger.info("Mails dumped to pickle file")
 

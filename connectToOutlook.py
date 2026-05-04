@@ -1,5 +1,6 @@
 import pathlib
 from datetime import datetime
+from typing import Any
 
 import win32com.client
 import re
@@ -15,22 +16,21 @@ from f_AutoMail.EW import EWExcel
 FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
 DEBUG = False #TODO - FOR EA OR UK1
 
+class OutlookConfig:
+    def __init__(self, debug = False):
+        self.bearer = EAsetup.bearer if debug else UK1setup.bearer
+        self.env = EAsetup.env if debug else UK1setup.env
+
+    def initWrapper(self, debug=None):
+        init(self.bearer, self.env, debug)
+
+
+outlookconfig : OutlookConfig = OutlookConfig(debug=False)
+
 def main():
-    #connect to open outlook application - must be open on the machine for this to work
-    try:
-        outlook = win32com.client.Dispatch("Outlook.Application").GetNameSpace('MAPI')
-    except AttributeError:
-        raise AttributeError("Could not run. Outlook is not open.")
+    outlook = connect()
 
-    aconexfolder : object
-    #get my account, find Aconex folder
-    for i in range(1,outlook.Folders.Count+1):
-        root = outlook.folders.Item(i)
-        if root.Name == "nicole.millinship@henrybrothers.co.uk":
-            aconexfolder = root.Folders["Aconex"]
-
-    if not aconexfolder:
-        raise Exception("No Aconex outlook folder found")
+    aconexfolder = find_folder("Aconex", outlook)
 
     aconexmessages = aconexfolder.items
     aconexmessages.Sort("[ReceivedTime]", True) #ensure sorted by date received
@@ -40,11 +40,6 @@ def main():
     latestmessages = latestmessages.Restrict("Not([Categories] = 'Python Parsed')")
     config.debug(f"{latestmessages.Count=}")
     latestmessages.Sort("[ReceivedTime]", False) #start with the oldest
-
-    global bearer
-    bearer = EAsetup.bearer if DEBUG else UK1setup.bearer
-    global env
-    env = EAsetup.env if DEBUG else UK1setup.env
 
     runset : set[tuple] = set()
     success : bool = True
@@ -58,6 +53,29 @@ def main():
         with open(FOLDERPATH + "\\Setup\\outlookLastRan.txt", "w") as file:
             file.write(lastRan.strftime('%d/%m/%Y %H:%M %p'))
             file.close()
+
+
+def find_folder(folder_to_find: str, outlook) -> object:
+    o_folder: object = None
+    # get my account, find Aconex folder
+    for i in range(1, outlook.Folders.Count + 1):
+        root = outlook.folders.Item(i)
+        if root.Name == "nicole.millinship@henrybrothers.co.uk":
+            o_folder = root.Folders[folder_to_find]
+
+    if not o_folder:
+        raise Exception("No '%s' outlook folder found" % folder_to_find)
+    return o_folder
+
+
+def connect() -> Any:
+    # connect to open outlook application - must be open on the machine for this to work
+    try:
+        outlook = win32com.client.Dispatch("Outlook.Application").GetNameSpace('MAPI')
+    except AttributeError:
+        raise AttributeError("Could not run. Outlook is not open.")
+    return outlook
+
 
 def getLastRan() -> str:
     with open(FOLDERPATH + "\\Setup\\outlookLastRan.txt", "r") as file:
@@ -143,46 +161,58 @@ def getmailno(subject : str) -> str:
     return splsub[0]
 
 def sendEWExcel(projectname: str, mailno: str) -> bool:
-    initProject(projectname)
+    initProject(outlookconfig, projectname, "projectnames")
     EWExcel.processEWMail(mailno)
     return True
 
 def autorunWFComments(projectname : str) -> bool:
     #Run WFComments for mail's project
-    initProject(projectname)
+    initProject(outlookconfig, projectname, "projectnames")
     WorkflowComments.main(inputUseTextFile="n", forceAll=True) #force all for now
     config.info("WorkflowComments ran successfully.")
     return True
 
-def autorunRFITracker(projectname : str) -> bool:
-    initProject(projectname)
+def autorunRFITracker(outlookconfig, projectname : str) -> bool:
+    initProject(outlookconfig, projectname, "projectnames")
     RFITracker.main()
     config.info("RFITracker ran successfully.")
     return True
 
-#find project details from csv using the parsed projectname
+#find project details from csv using the parsed projectname / code
 # init on that project
-def initProject(projectname : str):
+def initProject(outlookconfig : OutlookConfig, search_term : str, search_for : str = "projectnames"):
     projectslist: dict[str, list] = getProjectsList()
 
-    projectnames: list[str]
-    projectnames, _ = zip(*projectslist.values())
+    projectvals: list[str] = project_list_extract(projectslist, search_for)
 
     count = 0
-    while projectname not in projectnames:
+    while search_term not in projectvals:
         if count > 1:
             raise Exception("Cannot find project on Aconex. Major L")
         config.warning("Project not found in list - re-running getAllProjects")
         count += 1
-        init(bearer, env, debug=None)
+        outlookconfig.initWrapper(debug=None)
         getAllProjects.main()
         projectslist = getProjectsList()
-        projectnames, _ = zip(*projectslist.values())
+        projectvals = project_list_extract(projectslist, search_for)
 
-    projectindex = projectnames.index(projectname)
+    projectindex = projectvals.index(search_term)
     projectid = list(projectslist.keys())[projectindex]
+    projectname = list(projectslist.values())[projectindex][0]
     projectcode = list(projectslist.values())[projectindex][1]
 
-    init(bearer, env, debug=[projectname, projectid, projectcode])
+    outlookconfig.initWrapper(debug=[projectname, projectid, projectcode])
+    config.debug(f"{config.projectname()=}")
+
+
+def project_list_extract(projectslist: dict[str, list], search_for: str) -> list[str]:
+    projectvals: list[str]
+
+    if search_for == "projectnames":
+        projectvals, _ = zip(*projectslist.values())
+    elif search_for == "projectcodes":
+        _, projectvals = zip(*projectslist.values())
+    return projectvals
+
 
 main()

@@ -79,6 +79,8 @@ class NewUserEmail(OutlookMail):
         self.body = self.body.replace("PROJECT", self.project.projectName())
         self.setOrgAdmins(orgadmins)
 
+    #TODO - handle one org admin and change the body to suit
+
     def setSubject(self):
         self.subject = self.project.projectCodePrefix() + "Aconex New User Access"
 

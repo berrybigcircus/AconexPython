@@ -1,4 +1,5 @@
 import datetime
+import re
 import webbrowser
 from datetime import datetime
 from urllib.parse import urlencode
@@ -6,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import markdownify
 
-from Setup.APIcommon import getAPIResponse, convertToDateTime, SelLogIn, loadCookies, session, writeCookies
+from Setup.APIcommon import getAPIResponse, convertToDateTime, SelLogIn, loadCookies, session, writeCookies, getPages
 from Setup.Directory import AconexUser
 from Setup.FormField import AconexFormField
 from Setup.Project import Project
@@ -112,14 +113,14 @@ class AconexMail():
             if self.mailno.startswith("DRAFT"): #sometimes - when getting a mail thread, it will have picked up a draft. if so, exit asap
                 self.privateNote = "HBVoid"
                 return
-            luceneQuery = valQuery(self.mailno)
+            luceneQuery = valQuery(self.config, self.mailno)
             mailXML = getMailList(self.config, luceneQuery)[0]
 
         else:
-            self.mailno = mailXML.find("MailNo").text
+            self.mailno = mailXML.find("MailNo").text.strip()
             self.mailid = mailXML.get("MailId")
 
-        self.refno =  mailXML.find("ReferenceNumber").text
+        self.refno =  mailXML.find("ReferenceNumber").text.strip()
         self.subject = mailXML.find("Subject").text
         self.hasAttach(mailXML.find("HasAttachments").text)
 
@@ -593,10 +594,9 @@ def getReplies(project : Project, ogMail, replies, allRows, thisRow):
 
 # wrapper to search the inbox and the sent box
 def getMailList(config, luceneQuery) -> [str]:
-    iXML = getMailsForMailbox(config,"inbox", luceneQuery)  # in inbox
-    sXML = getMailsForMailbox(config,"sentbox", luceneQuery)  # in sent box
-    return ET.fromstring(iXML.strip()).findall("SearchResults/Mail") + ET.fromstring(sXML.strip()).findall(
-        "SearchResults/Mail")
+    iMails = getMailsForMailbox(config,"inbox", luceneQuery)  # in inbox
+    xMails = getMailsForMailbox(config,"sentbox", luceneQuery)  # in sent box
+    return iMails + xMails
 
 # Convert mail xml to Aconex Mail objects, filtering by one per parent RFI
 def createAMails(config, mailsReturnedXML: [str], filterTypes: dict) -> list[AconexMail]:
@@ -618,7 +618,7 @@ def createAMails(config, mailsReturnedXML: [str], filterTypes: dict) -> list[Aco
 
     return aMails
 
-def getMailsForMailbox(config, mailbox, luceneQuery) -> str:
+def getMailsForMailbox(config, mailbox, luceneQuery) -> [ET.Element]:
     headers = {'Authorization': config.bearer(),
                'Accept': 'application/vnd.aconex.mail.v2+xml'}
 
@@ -626,18 +626,17 @@ def getMailsForMailbox(config, mailbox, luceneQuery) -> str:
                   "return_fields": "corrtypeid,inreftomailno,docno,subject,fromUserDetails,mailRecipients,sentdate,responsedate,hasAttachments,closedoutdetails",
                   "mail_box": mailbox,  # we must specify a mailbox
                   "search_query": luceneQuery,
-                  "page_size": "500",  # TODO handle more pages
+                  "page_size": "500",
                   "sort_field": "responsedate",
                   "sort_direction": "DESC"
                   }
 
-    url = config.projecturl() + "/mail?" + urlencode(parameters)
-
-    xml = getAPIResponse(url, headers, "searching the mailbox")
-    return xml
+    baseurl = config.projecturl() + "/mail"
+    searchXml = getPages(headers, parameters, baseurl, "searching the mailbox")
+    return searchXml
 
 def searchForMail(config, mailno: str) -> AconexMail:
-    luceneQuery = valQuery(mailno)
+    luceneQuery = valQuery(config, mailno)
 
     filterMails = getMailList(config, luceneQuery)
     mailDict = dict.fromkeys([m.get("MailId") for m in filterMails])
@@ -645,17 +644,24 @@ def searchForMail(config, mailno: str) -> AconexMail:
 
     return AconexMail(config, mailid="", mailXML=filterMails[0])
 
-def valQuery(mailno: str) -> str:
-    #escape brackets in mail no
+def valQuery(config, mailno: str) -> str:
+    #these are all the valid chars in the mail no. any invalid characters, replace with ?
+    validre = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqstruvwxyz0123456789-()+[]"
+
+    invalidre = set(mailno).difference(set(mailno).intersection(set(validre)))
+    if invalidre: #if set is not empty
+        for char in invalidre:
+            mailno = mailno.replace(char, '?')
+
+    # escape brackets in mail no
     mailno = mailno.translate(str.maketrans({'(': "\\(", ")": "\\)", '+': '\\+'}))
-    # this is for orgs with no org code, it breaks the search to have two hyphens
+
+    #it will break if you start with a - but if you use a wildcard it will be okay again, idk why. sticking a * seems the easiest, i cant think of a scenario where this will break
     if mailno[0] == "-":
-        return "docno:" + mailno[0] + mailno[1:].replace("-", "?")
-    elif " " in mailno or "." in mailno:  # spaces and periods break it completely, replace with ?
-        return "docno:" + mailno.translate(str.maketrans({".": "?", " ": "?"}))
+        config.logger.warning("Mail no starts with hyphen, processing as docno:%s*" % mailno)
+        return "docno:" + mailno + "*"
     else:
         return "docno:" + mailno
-
 
 def openDraftLink(config, returnedXml):
     draftedMailId = ET.fromstring(returnedXml.strip()).find('NewMailId').text
