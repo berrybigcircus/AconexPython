@@ -1,26 +1,20 @@
 import datetime
-import mimetypes
 import os
 import pathlib
-from base64 import b64encode
+import pickle
+import xml.etree.ElementTree as ET  # for parsing xml
 from typing import Any
 
 import pandas
-import pickle
-
-import xml.etree.ElementTree as ET  # for parsing xml
-
 import requests
-import win32com.client
 
-from Setup.APIcommon import importLastRun, postAPIFile, postAPIResponse
+from Setup.APIcommon import importLastRun
 from Setup.Directory import findMailingGroups, addUserIds
+from Setup.Doc import search_for_tracker
 from Setup.FormField import createxmltemplate
-from Setup.config import config
-from Setup.Doc import searchForDoc, getDocumentLink
-
-from Setup.Mail import AconexMail, getRFIMailTypes, getAllMail, getrfithread, searchForMail, \
-    convertMailTypesToDict, AconexThread, getBallInCourt, openDraftLink, sendDraft, searchMail
+from Setup.Mail import AconexMail, getRFIMailTypes, getAllMail, searchForMail, \
+    AconexThread, getBallInCourt, openDraftLink, searchMail
+from Setup.config import config, refreshTracker, get_modification_time
 
 mailData = {
     "Status": [],
@@ -37,7 +31,8 @@ mailData = {
     "Comments": [],
     "Date Closed": [],
     "(Helper) Hyperlink": [],
-    "Mail Number": []
+    "Mail Number": [],
+    "Sent to": []
 }
 
 def main():
@@ -56,13 +51,12 @@ def main():
         for k, v in d.items():
             mailData[k].append(v)
 
-    print([len(l) for l in mailData.values()])
     exportToExcel(exp_filename, mailData)
 
     rfipath = exp_filename.replace("Exported Data.xlsx", "RFI Tracker.xlsx") #get the finalised tracker not the raw export
 
     if os.path.exists(rfipath):
-        uploadRFITracker(rfipath)
+        uploadRFITracker(config, rfipath)
     else:
         config.logger.error("No RFI tracker file found. Please create tracker file to update the doc register")
 
@@ -79,7 +73,7 @@ def createMailsFromDF(df) -> list[AconexMail]:
         refno = serRow["Reference Number"]
         comments = serRow["Comments"]
 
-        am = searchForMail(refno)
+        am = searchForMail(config, refno)
         am.setComment(comments)
         aconexMails.append(am)
 
@@ -116,7 +110,7 @@ def exportToExcel(filename, mailData):
 
 def getrfithreadnew(loadpickle = False, lastrun : datetime.datetime = None):
     rfimailtypes, rfireplymailtypes = getRFIMailTypes(config.project(), config.mailtypes())
-    pickle_path = config.project().getPickleLocation()
+    pickle_path = config.project().getRFIPickleLocation()
 
     if not lastrun:
         loadpickle = False
@@ -182,6 +176,7 @@ def convertToRow(allRows: list[Any], rfimail: AconexMail, rfimailtypes, rfireply
     thisRow["Ball in Court"] = "N/A"
     thisRow["Status"] = rfimail.getStatus()  # for now
     thisRow["Date Closed"] = rfimail.getClosedOutDate()
+    thisRow["Sent to"] = ", ".join(rfimail.getToOrgs())
 
     rfithread = AconexThread(config, rfimail.threadid)
 
@@ -220,6 +215,7 @@ def convertToRow(allRows: list[Any], rfimail: AconexMail, rfimailtypes, rfireply
             thisRow["Discipline(s)"] = rfiforward.getFormFieldVal(config.project().getRFIDiscSetup())
             thisRow["RFI Description"] = rfiforward.getFormFieldVal(config.project().getRFISetup()[0])
             thisRow["Mail Number"] = rfiforward.mailno
+            thisRow["Sent to"] = ", ".join(rfiforward.getToOrgs())
 
             if rfiforward.isOutstanding() and not rfiforward.isClosed():
                 thisRow["Status"] = rfiforward.getStatus()
@@ -229,103 +225,21 @@ def convertToRow(allRows: list[Any], rfimail: AconexMail, rfimailtypes, rfireply
                 getBallInCourt(lastresponse, allRows, thisRow)
     return thisRow
 
-#Refresh data connections
-def refreshTracker(filepath):
-    xlapp = win32com.client.DispatchEx("Excel.Application")
-    wb = xlapp.Workbooks.Open( filepath)
-    wb.RefreshAll()
-    xlapp.CalculateUntilAsyncQueriesDone()
-    wb.Save()
-    xlapp.Quit()
-    config.logger.info("RFI tracker refreshed")
-    del wb
-    del xlapp
-
-
-def uploadRFITracker(filepath):
-    refreshTracker(filepath)
-    FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
-
-    filename = filepath.split("\\")[-1]
-
-    docnumber = config.project().getRFIDocNumber()
-    #check if tracker exists already
-    config.logger.info("Searching for %s in doc register" % docnumber)
-    returnfields = "title,revision,author,statusid,doctype,discipline,category,vdrcode,selectlist1"
-    docxml = searchForDoc(config, "docno:{}".format(docnumber), returnfields)
-
-    url = config.projecturl() + "/register/"
-    headers = {'Authorization': config.bearer(),
-               'Content-Type': 'multipart/mixed',
-               'boundary': 'myboundary'}
-
-    if docxml == None:
-        config.logger.error("RFI Tracker not found in register. Please add a placeholder")
-        exit()
+def uploadRFITracker(config, filepath, force_upload : bool = False):
+    if not force_upload:
+        dategen = refreshTracker(filepath)
     else:
-        config.logger.info("RFI Tracker found in register.")
+        dategen = get_modification_time(filepath)
 
-        doctemplatexml = createxmltemplate('Document', config.mandatorydocfields())
-        root = doctemplatexml.getroot()
-        for elem in root:
-            existingval = docxml.find(elem.tag)
-            if existingval is not None:
-                elem.text = existingval.text
+    if force_upload or dategen:
+        docnumber = config.project().getRFIDocNumber()
+        docxml = search_for_tracker(config, filepath, docnumber, dategen)
+        if docxml:
+            config.logger.info("RFI Tracker uploaded to register.")
 
-        docid = docxml.attrib.pop('DocumentId')
-        url += docid + "/supersede"
-
-        doctemplatexml.find('Revision').text = datetime.datetime.now().strftime("%Y/%m/%d")
-        doctemplatexml.find('HasFile').text = "true"
-        dn = doctemplatexml.find('DocumentNumber')
-        root.remove(dn)
-
-        # Type and Status is a required field but a list docs search only returns the name of the doc type, not the IDs
-        doctypename = docxml.find('DocumentType').text
-        doctypeid = config.docTypes()[doctypename]
-        assert doctypeid is not None
-        typeidxml = doctemplatexml.find('DocumentTypeId')
-        typeidxml.text = doctypeid
-
-        statusname = docxml.find('DocumentStatus').text
-        docstatusid = config.docStatuses()[statusname]
-        assert docstatusid is not None
-        statusidxml = doctemplatexml.find('DocumentStatusId')
-        statusidxml.text = docstatusid
-
-        if config.searchForFormField('milestonedate'):
-            mdate = ET.Element('milestonedate')
-            mdate.text = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            doctemplatexml.append(mdate)
-
-
-        #ET.indent(root, space="", level=0)
-
-        xmldata = "--myboundary\n\n" + ET.tostring(root, encoding='unicode') + "\n--myboundary\n\nX-Filename: " + filename + "\n\n"
-
-        with open(filepath, "rb") as f: #read bytes of file
-            encoded = b64encode(f.read())
-            encStr = encoded.decode("utf-8")
-            xmldata = xmldata + encStr + "\n\n--myboundary--"
-
-        f.close()
-
-        with open((FOLDERPATH + "\\text.txt"), "w") as f:
-            f.write(xmldata)
-        f.close()
-
-        response = requests.post(url, headers=headers, data=xmldata)
-
-        if response.status_code != 200:
-            config.error("There was an error superseding RFI tracker. %s" % response.reason)
-            exit()
-
-        config.logger.info("RFI tracker superseded")
-        xml = response.text
-        newdocid = ET.fromstring(xml).find('RegisterDocument').text
-
-        getDocumentLink(config.env(), newdocid)
-        #registerTransmittal(newdocid)
+    else:
+        config.logger.warning("Tracker at %s not uploaded." % filepath)
+        return False
 
 #TODO
 def registerTransmittal(docid: str):
@@ -371,7 +285,6 @@ def registerTransmittal(docid: str):
     addUserIds(root,'ToUserId', userIds)
 
     ET.indent(root, space="", level=0)
-    print(ET.tostring(root, encoding='unicode'))
 
     xmldata = ("--myboundary\nContent-Type: application/vnd.aconex.mail.v3+xml\n\n" +
                ET.tostring(root, encoding='unicode') + "\n--myboundary\n\nX-DocumentId: " + docid + "\n\n--myboundary--")

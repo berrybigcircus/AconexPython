@@ -4,7 +4,8 @@ from Setup.getAllProjects import getAllProjects
 from a_NewUser import newUser
 from b_Workflow import WorkflowComments
 from c_Field import exporting, IssuesPhotos, inspectionPDF
-from d_Mail.Import import ImportFromExcel, OutlookChecker
+from d_Mail.Import import OutlookChecker
+#from d_Mail.Import import ImportFromExcel, OutlookChecker
 from d_Mail.RFIs import RFITracker
 from d_Mail.NEC_EWN import NEC_EWN
 from e_DocUpdating import RelatedItems
@@ -45,16 +46,16 @@ def docMain():
 
 def MailMain():
     #RFITracker.test()
-    #RFITracker.main()
+    RFITracker.main()
     #RFITracker.sendDraft(config, "https://ea1.aconex.com/hub/index.html?mainTarget=%2Frsrc%2F20250422.1347%2Fen_AU_DOC%2Fmail%2Fview%2Findex.html%23%2F1879048648%2F1880257357")
     #RFITracker.uploadRFITracker(r"C:\Users\nicole.millinship\PycharmProjects\AconexPython\d_Mail\RFIs\Trackers\MTP - RFI Tracker.xlsx")
     #NEC_EWN.main()
     #ImportFromExcel.main(False)
-    OutlookChecker.main()
+    #OutlookChecker.main()
 
 #load all MOJ RFI trackers
 def mojRFIs():
-    # init(UK1setup.bearer, UK1setup.env, debug=["HMCTS Manchester", "268459030", "51023"])
+    # init(UK1setup.bearer, UK1setup.env, debug=,,)
     # RFITracker.main()
 
     init(UK1setup.bearer, UK1setup.env, debug=["HMCTS Nottingham", "268458266", "9910"])
@@ -77,14 +78,14 @@ def main():
     #init(UK1setup.bearer, UK1setup.env, debug=["QMC Endoscopy", "268456597", "QMC"]) #QMC Nendo
     #init(UK1setup.bearer, UK1setup.env, debug=["NUHT Community Diagnostics Centre", "268456728", "CDC"]) #CDC
     #init(UK1setup.bearer, UK1setup.env, debug=["MTP", "268457782", "MTP"])
-    #init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project
+    init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project
 
     #RUN PACKAGES
     #newUserMain(createdirectory=False)
-    #WFCommsMain()
+    WFCommsMain()
     #fieldMain()
     # docMain()
-    MailMain()
+    #MailMain()
     #mojRFIs()
 
     config.logger.info("Ran in %.2f seconds" % (time.time() - start_time))

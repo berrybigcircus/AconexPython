@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import pathlib
@@ -5,7 +6,10 @@ import shutil
 import datetime
 import mimetypes
 
-from Setup.config import config
+from PIL import Image, ExifTags
+from shapely.geometry import Polygon, Point
+
+from Setup.config import config, Config
 from Setup.APIcommon import getAPIResponse, getAPIFile, postAPIResponse, postAPIFile, putAPIResponse
 
 
@@ -257,3 +261,68 @@ def markAsClosed(jsonIssue : str, areaID : str, issueDescription : str):
         "status": "Closed"}
 
     putAPIResponse(url, headers, body, "marking the Issue as closed")
+
+
+def loadRoomCoords(config : Config):
+    roomcoords_csv = config.project().getRoomCoordsLocation()
+
+    rooms = {}
+    room_heights = {}
+
+    with open(roomcoords_csv, "r", newline='', encoding="utf-8-sig") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            rname = row["Room Name"]
+
+            if rname in rooms:
+                rooms[rname].append((dms_to_decimal(row["Longitude"]), dms_to_decimal(row["Latitude"])))
+            else:
+                rooms[rname] = [(dms_to_decimal(row["Longitude"]), dms_to_decimal(row["Latitude"]))]
+
+            room_heights[rname] = (float(row["Floor Altitude (m)"]), float(row["Room Height (m)"]))
+
+    room_polygons = {room_id: Polygon(coords) for room_id, coords in rooms.items() }
+
+    print(room_polygons)
+    return room_polygons, room_heights
+
+
+def dms_to_decimal(dms : str) -> float:
+    deg, minutes, seconds = dms.split("; ")
+    return float(deg) + float(minutes )/ 60 + float(seconds) / 3600
+
+def testcoordinates(room_polygons, room_heights, latstr : str, longstr : str, altitude : str):
+    lat = dms_to_decimal(latstr)
+    long = dms_to_decimal(longstr)
+    altitude = float(altitude)
+    photo_point = Point(long, lat)
+
+    for room_id, polygon in room_polygons.items():
+        room_alt, room_height = room_heights[room_id]
+
+        max_height = room_alt + room_height
+
+        if polygon.contains(photo_point) and room_alt <= altitude <= max_height:
+            print(f"Photo is in {room_id}")
+            return True
+
+    print("Photo is not in any rooms")
+    return False
+
+
+def loadPhotos(folderpath):
+    for f in os.listdir(folderpath):
+        filepath = folderpath + "\\" + f
+        if os.path.isfile(filepath):
+            filesizebytes = os.path.getsize(filepath)
+            fileextshortname, _ = mimetypes.guess_type(f)
+            if filesizebytes < 1:
+                print("The file %s is so small it must be corrupted. Sus" % f)
+
+            assert fileextshortname
+            if fileextshortname.startswith("image/"):
+                img = Image.open(filepath)
+                img_exif = img.getexif()
+                gps_ifd = img_exif.get_ifd(ExifTags.IFD.GPSInfo)
+                print(gps_ifd)
+

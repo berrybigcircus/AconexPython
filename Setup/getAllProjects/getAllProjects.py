@@ -15,7 +15,7 @@ def main():
 
     xml = getAPIResponse(url, headers=headers, explanation="getting the list of all projects")
 
-    FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
+    FOLDERPATH = str(pathlib.Path(__file__).parent.resolve()) #TODO clean to defined path
     config.info("Writing to %s" % FOLDERPATH + "\\projectList.csv")
     csvfile = open(FOLDERPATH + "\\projectList.csv", "w", newline ='')
     writer = csv.writer(csvfile)

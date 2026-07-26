@@ -174,7 +174,7 @@ def createTemplate():
     config.logger.info("Project Mail Template created")
 
 def getProjectMailData():
-    filename: str = FOLDERPATH + "\\" + config.project().projectCodePrefix() + "Mail_Template.xlsx"
+    filename: str = config.project().getMailTemplateLocation()
     if not os.path.exists(filename):
         addInstructions(filename)
 
@@ -228,16 +228,16 @@ def getProjectMailData():
     wb.close()
 
 def addInstructions(filename : str):
-    writer = pandas.ExcelWriter(filename, mode='w')
+    writer = pandas.ExcelWriter(filename, mode='w', engine='xlsxwriter')
     workbook = writer.book
     worksheet = workbook.add_worksheet('Instructions')
     #TODO - add instructions I CBA
     writer.close()
 
 def importExcel() -> dict | None:
-    filename: str = FOLDERPATH + "\\" + config.project().projectCodePrefix() + "Mail_Template.xlsx"
+    filename: str = config.project().getMailTemplateLocation()
     try:
-        excelDataDFDict = pandas.read_excel(open(filename, 'rb'), sheet_name=None, skiprows=[0]) #by specifying no sheet name, it pulls all sheets
+        excelDataDFDict = pandas.read_excel(open(filename, 'rb'), sheet_name=None, skiprows=[0], engine='openpyxl') #by specifying no sheet name, it pulls all sheets
     except FileNotFoundError:
         config.logger.error("Could not find template at %s" % filename)
         return None

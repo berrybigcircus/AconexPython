@@ -1,5 +1,12 @@
+import datetime
 import logging
+import os
+import subprocess
 import pathlib
+import time
+
+import pywintypes
+import win32com.client
 
 from Setup.APIcommon import getAPIResponse
 from Setup.Doc import DocFormField
@@ -36,6 +43,8 @@ class Config:
         self.PROJECT : Project
         self.PROJECTNAME : str
         self.PROJECTURL : str
+
+        self.folderroot = str(pathlib.Path(__file__).parents[1].resolve())
 
         self.MAILFIELDS : list[MailFormField] = None #the entire mail schema for creating a new mail
         self.MAILTYPES: list[(bool, AconexMailType)] = None  # bool = True if you can start a thread with the mail type
@@ -98,6 +107,15 @@ class Config:
 
     def token(self) -> str:
         return self.TOKEN
+
+    def getOutlookLastRanLocation(self) -> str:
+        return "{}\\Setup\\outlookLastRan.txt".format(self.folderroot)
+
+    def getOrgCSVLocation(self) -> str:
+        return r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - Docs\General\#Other Files\Aconex\OrgAdminList.csv"
+
+    def getNUTrackerLocation(self) -> str:
+        return r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - Docs\General\#Other Files\Aconex\Aconex New Users Tracker.xlsm"
 
     def mailtypes(self) -> list[AconexMailType]:
         if not self.MAILTYPES:
@@ -269,4 +287,95 @@ def init(passedBearer, env,  debug=[], token=None):
     #init may be run more than once so re-create
     else:
         config.create(passedBearer, env, debug, token)
+
+#get datetime a file was modified
+def get_modification_time(filepath) -> str:
+    modification_time = os.path.getmtime(filepath)
+    readable_time = datetime.datetime.fromtimestamp(modification_time).strftime('%Y/%m/%d %H:%M')
+    return readable_time
+
+def refreshTracker(filepath, accept_time_diff : bool = False) -> str:
+    MAX_RETRIES = 3
+
+
+    wb: object
+
+
+    # Check if the date generated timestamp has changed (proves it refreshed)
+
+
+    attempt = 1
+    for attempt in range(1, MAX_RETRIES+1):
+        xlapp = win32com.client.DispatchEx("Excel.Application")
+
+        xlapp.DisplayAlerts = False
+        xlapp.AskToUpdateLinks = False
+        xlapp.EnableEvents = False
+        xlapp.Visible = True
+        wb = xlapp.Workbooks.Open(filepath)
+        sheet = wb.Sheets("RawData")
+        original_dategen = sheet.Range("B2").Value
+
+
+        config.logger.info("Attempt %d" % attempt)
+        time.sleep(3)
+        CONN_RETRIES = 10
+
+        for conn in wb.Connections:
+            try:
+                conn.OLEDBConnection.BackgroundQuery = False
+            except:
+                pass
+
+        for _ in range(CONN_RETRIES):
+            try:
+                wb.RefreshAll()
+
+                break
+            except pywintypes.com_error:
+                time.sleep(2)
+
+        while True:
+            refreshing = False
+            for conn in wb.Connections:
+                try:
+                    if conn.OLEDBConnection.Refreshing:
+                        refreshing = True
+                except:
+                    pass
+            if not refreshing:
+                break
+            time.sleep(1)
+
+        new_dategen = sheet.Range("B2").Value
+
+        if not accept_time_diff and original_dategen == new_dategen:
+            config.logger.error("Tracker did not successfully refresh.")
+            wb.Close()
+            xlapp.Quit()
+            continue
+
+        wb.Save()
+        wb.Close()
+        xlapp.Quit()
+        break
+
+
+
+
+    del wb
+    del xlapp
+
+    wb = None
+    xlapp = None
+
+    config.logger.info("%d, %d" % (attempt, MAX_RETRIES))
+
+    if int(attempt) < int(MAX_RETRIES):
+        if type(new_dategen) != str:
+            new_dategen = new_dategen.strftime("%Y/%m/%d %H:%M")
+        return new_dategen
+    else:
+        return None
+
 

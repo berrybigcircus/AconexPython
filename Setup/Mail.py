@@ -1,26 +1,23 @@
 import datetime
-import re
 import webbrowser
 from datetime import datetime
-from urllib.parse import urlencode
 from xml.etree import ElementTree as ET
 
 import markdownify
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 
-from Setup.APIcommon import getAPIResponse, convertToDateTime, SelLogIn, loadCookies, session, writeCookies, getPages
+from Setup.APIcommon import getAPIResponse, convertToDateTime, SelLogIn, loadCookies, session, getPages
 from Setup.Directory import AconexUser
 from Setup.FormField import AconexFormField
 from Setup.Project import Project
-
 from selenium import webdriver
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
+
 
 class MailFormField(AconexFormField):
-    def __init__(self, label, fid, datatype, mandatorystr, value=None):
+    def __init__(self, label, fid, datatype, mandatorystr, restricted = False, value=None):
         mandatory : bool = False if mandatorystr in ["false", "NOT_MANDATORY", "CONDITIONAL"] else True
+        restricted : bool = restricted # i think only mail can have restricted??
         super().__init__(label, fid, datatype, mandatory, value)
 
     def isSearchable(self) -> bool:
@@ -66,12 +63,16 @@ class AconexMailType:
         xml = getAPIResponse(url=url, headers=headers, explanation="getting the form fields for the specified mail.")
 
         formFieldsXml = ET.fromstring(xml.strip()).findall('MailFormField')
-        for ffXML in formFieldsXml:
+        num_formfields = len(formFieldsXml)
+        formFieldsXml += ET.fromstring(xml.strip()).findall('RestrictedField') #add restricted fields
+        for i, ffXML in enumerate(formFieldsXml):
             label = ffXML.find('Label').text
             dtype = ffXML.get('type')
             fid = ffXML.get('identifier')
             mandatory = ffXML.get('mandatory')
-            self.__projectFields.append(MailFormField(label, fid, dtype, mandatory))
+            restricted = num_formfields <= i
+            self.__projectFields.append(MailFormField(label, fid, dtype, mandatory, restricted))
+
 
     #since get mail schema only does create mails, get the replies/forwards of this type and return the xml list
     def getReplySchema(self) -> set[ET.Element]:
@@ -106,21 +107,41 @@ class AconexMail():
     def __init__(self, config, mailid="", mailXML : ET.Element=None, comments=""):
         self.config: config.Config = config
         self.mailno : str = None
+        self.refno : str = None
 
-        if mailXML == None: #if list mail hasn't been run
-            self.mailid = mailid
-            self.viewMailMetadata() #now we will have a mailno
-            if self.mailno.startswith("DRAFT"): #sometimes - when getting a mail thread, it will have picked up a draft. if so, exit asap
-                self.privateNote = "HBVoid"
-                return
+        self.mailid = mailid
+        self.formfields : list[MailFormField] = None
+
+        self.viewMailMetadata()
+
+        if self.mailno.startswith("DRAFT"):  # sometimes - when getting a mail thread, it will have picked up a draft. if so, exit asap
+            self.privateNote = "HBVoid"
+            return
+
+        if mailXML == None:
             luceneQuery = valQuery(self.config, self.mailno)
             mailXML = getMailList(self.config, luceneQuery)[0]
 
-        else:
-            self.mailno = mailXML.find("MailNo").text.strip()
-            self.mailid = mailXML.get("MailId")
+        # if mailXML == None: #if list mail hasn't been run
+        #     self.mailid = mailid
+        #     self.viewMailMetadata() #now we will have a mailno
+        #
+        #     if self.mailno.startswith("DRAFT"): #sometimes - when getting a mail thread, it will have picked up a draft. if so, exit asap
+        #         self.privateNote = "HBVoid"
+        #         return
+        #     #
+        #     # self.getMailThread()
+        #     # luceneQuery = valQuery(self.config, self.mailno)
+        #     # mailXML = getMailList(self.config, luceneQuery)[0]
+        #
+        # else:
+        #     self.mailno = mailXML.find("MailNo").text.strip()
+        #     self.mailid = mailXML.get("MailId")
+        #
+        #     self.viewMailMetadata()
 
-        self.refno =  mailXML.find("ReferenceNumber").text.strip()
+        self.refno = mailXML.find("ReferenceNumber").text.strip()
+
         self.subject = mailXML.find("Subject").text
         self.hasAttach(mailXML.find("HasAttachments").text)
 
@@ -145,22 +166,15 @@ class AconexMail():
         fromorg = fromuserXML.find("OrganizationName").text
         self.From = AconexUser(fromname, fromorg, "FROM")
 
+        self.status: str = None
         self.hyperlink: str = self.getHyperlink()  # as per usual i have to write it myself SMH
 
         self.RootMail: AconexMail
-        self.getRootMail()
-
         self.ParentMail: AconexMail
         self.replytype : str #if mail was a reply or a forward to its parent
-
         self.Replies : list[(AconexMail, str)] = []
 
-        self.formfields : list[MailFormField] = []
-
         self.comments = comments  # the only man-made field
-
-        self.status: str
-        self.threadid: str
 
         self.body: str
         self.privateNote: str = ""
@@ -188,7 +202,7 @@ class AconexMail():
         self.__hasAttachments = hasAttach == "true"
 
     def isRoot(self) -> bool:
-        return self.mailno == self.refno
+        return self.RootMail
 
     #if the final child in the thread (no replies to this mail)
     def isLeaf(self) -> bool:
@@ -214,6 +228,7 @@ class AconexMail():
         #if it has not been fed values for these already
         if not self.mailno:
             self.mailno = root.find("MailNo").text
+            self.mailtypename = root.find("CorrespondenceType").text
 
         # there can be multiple notes, but since you can't delete - take the last one as the important one (i'm assuming the notes are in date order)
         notes = root.findall("Notes/Note/NoteContents")
@@ -222,9 +237,8 @@ class AconexMail():
         self.body = markdownify.markdownify(root.find("MailData").text) if root.find("MailData").text is not None else ""
         self.status = root.find("Status").text
         self.threadid = root.find("ThreadId").text
-        self.getMailThread()
-
-        self.getFormFields(root.findall("MailFormFields/MailFormField"))
+        mffxml = root.findall("MailFormFields/MailFormField")
+        self.getFormFields(root.findall("MailFormFields/MailFormField")+root.findall("RestrictedFields/RestrictedField"), len(mffxml))
 
     def isVoid(self) -> bool:
         return self.privateNote.lower() == "hbvoid"
@@ -245,16 +259,17 @@ class AconexMail():
     def isResponded(self) -> bool:
         return self.status == "Responded" or self.status == "Partial"
 
-    def getFormFields(self, formfieldsXML):
+    def getFormFields(self, formfieldsXML, num_formfields : int):
         self.formfields = []
 
-        for ffXML in formfieldsXML:
+        for i, ffXML in enumerate(formfieldsXML):
             label = ffXML.find("Label").text
             ident = ffXML.get("Identifier")
             dtype = ffXML.get('type')
             mandatory = ffXML.get("mandatory")
             value = ffXML.find("Value").text
-            self.formfields.append(MailFormField(label, ident, dtype, mandatory, value))
+            restricted = num_formfields > i + 1
+            self.formfields.append(MailFormField(label, ident, dtype, mandatory, restricted, value))
 
     # using the label name of the form field, return its value
     def getFormFieldVal(self, label : str) -> str:
@@ -262,6 +277,23 @@ class AconexMail():
         if len(ffvals) == 1:
             return ffvals[0]
         return None
+
+    # def checkForNewRef(self):
+    #     #In Admin Error mail type, a project field to reset ref number is added in case the numbers get messed up
+    #     if self.mailtypename == "Admin Error" and self.formfields and not self.isVoid():
+    #         newref = self.getFormFieldVal("New Reference Number")
+    #         if newref:
+    #             self.resetrefno(newref)
+    #
+    # #change ref no for current mail, root mail, and replies
+    # def resetrefno(self, newref : str):
+    #     self.refno = newref
+    #     self.getRootMail().refno = newref
+    #     self.ParentMail.refno = newref
+    #
+    #     for repmail, _ in self.Replies:
+    #         repmail.refno = newref
+
 
     def getHyperlink(self) -> str:
         return (self.config.env() + "/hub/index.html?mainTarget=%2FViewCorrespondence%3FPROJECT_ID%3D" + self.config.project().projectID() +
@@ -272,34 +304,44 @@ class AconexMail():
             env=self.config.env(), pid=self.config.project().projectID(), ref=self.refno
         ))
 
-    def getRootMail(self):
-        if self.isRoot():
-            self.RootMail = None #this is the root
-        else:
-            self.RootMail = searchForMail(self.config, self.refno)
+    def getParentMail(self):
+        return self.ParentMail
 
-        return self.RootMail
+    #def getMailThread(self):
+        # self.Replies = []
+        #
+        # #call getMaiLThread
+        # self.aconexthread = AconexThread(self.config, self.threadid)
+        #
+        # if self.isRoot():
+        #     self.RootMail = None #this is the root
+        #     self.ParentMail = None
 
-    def getMailThread(self):
-        self.Replies = []
-        #call getMaiLThread
-        headers = {'Authorization': self.config.bearer(),
-                   'Accept': 'application/vnd.aconex.mail.v2+xml'}
-        url = self.config.projecturl() + "/mail/" + self.threadid + "/thread"
-        xml = getAPIResponse(url, headers, "getting the mail thread for " + self.mailno)
 
-        # filter to where we currently are in the thread, to prevent an endless loop - we just want this mail's replies/forwards
-        threadXML = ET.fromstring(xml.strip()).findall("Mail")
-
-        replyMailsXML = readThread(threadXML, self.mailid)
-        replyMailsXML = replyMailsXML.findall("Replies/Mail")
-
-        for rpMXML in replyMailsXML:
-            mailid = rpMXML.get("MailId")
-            repMail = AconexMail(self.config, mailid=mailid, mailXML=None)
-            repType : str = rpMXML.find("ReplyType").text
-            if not repMail.isVoid():
-                self.Replies.append((repMail,repType))
+        # headers = {'Authorization': self.config.bearer(),
+        #            'Accept': 'application/vnd.aconex.mail.v2+xml'}
+        # url = self.config.projecturl() + "/mail/" + self.threadid + "/thread"
+        # xml = getAPIResponse(url, headers, "getting the mail thread for " + self.mailno)
+        #
+        # # filter to where we currently are in the thread, to prevent an endless loop - we just want this mail's replies/forwards
+        # threadXML = ET.fromstring(xml.strip()).findall("Mail")
+        # parentid = threadXML[0].get("MailId")
+        # replyMailsXML, parentid = readThread(threadXML, self.mailid, parentid)
+        # replyMailsXML = replyMailsXML.findall("Replies/Mail")
+        #
+        # for rpMXML in replyMailsXML:
+        #     mailid = rpMXML.get("MailId")
+        #     repMail = AconexMail(self.config, mailid=mailid, mailXML=None)
+        #     repType : str = rpMXML.find("ReplyType").text
+        #     if not repMail.isVoid():
+        #         repMail.ParentMail = self
+        #         self.Replies.append((repMail,repType))
+        #
+        # if self.isRoot():
+        #     self.RootMail = None #this is the root
+        #     self.ParentMail = None
+        # else:
+        #     self.RootMail = AconexMail(self.config, self.threadid, None) #the rootmail ID is the same as the thread ID
 
     def getLatestReply(self):
         if self.isLeaf():
@@ -340,6 +382,7 @@ class AconexThread:
         self.getMailThread()
         self.root = self.getRoot()
         self.latestmail = self.getLatestMail(self.threadlist)
+        self.refno = self.getRefNo()
 
     def getMailThread(self):
         #call getMaiLThread
@@ -348,31 +391,35 @@ class AconexThread:
         url = self.config.projecturl() + "/mail/" + self.threadid + "/thread"
         xml = getAPIResponse(url, headers, "getting the mail thread")
         threadXML = ET.fromstring(xml.strip()).findall("Mail")
-        self.threadlist = self.readThread(threadXML)
+        parentid = threadXML[0].get("MailId")
+        self.threadlist = [am for am, _ in self.readThread(threadXML, None, None)]
 
     #Recursive
-    def readThread(self, threadXML: list[ET.Element]) -> list[AconexMail]:
-        threadmails : list[AconexMail] = []
+    def readThread(self, threadXML: list[ET.Element], rootmail, parentmail) -> list[(AconexMail, str)]:
+        threadmails : list[(AconexMail, str)] = []
 
         if len(threadXML) > 0:
             for mailXML in threadXML:
                 mailid = mailXML.get("MailId")
                 replytype = mailXML.find("ReplyType").text
                 amail = AconexMail(self.config, mailid=mailid, mailXML=None)
-                if not amail.isVoid():
+                if not amail.isVoid(): #ignore voids in the thread
                     amail.replyType = replytype
-                    if replytype != "NEVER_RESPONDED":
-                        #TODO thats not right
-                        pass
-                        #parentid = mailXML.find("InRefTo").get("MailId")
-                        #amail.ParentMail = self.findfromID(parentid)
 
-                    amail.viewMailMetadata()
-                    threadmails.append(amail)
+                    if not rootmail:
+                        rootmail = amail
+
+                    amail.RootMail = rootmail if rootmail != amail else None
+                    amail.ParentMail = parentmail
+
+                    threadmails.append((amail, replytype))
 
                 newthreadXML = mailXML.findall("Replies/Mail")
                 if len(newthreadXML) > 0:
-                    threadmails += self.readThread(newthreadXML)
+                    parentmail = amail
+                    childmails = self.readThread(newthreadXML, rootmail, parentmail)
+                    threadmails += childmails
+                    amail.Replies = childmails
 
             return threadmails
         else:
@@ -387,17 +434,46 @@ class AconexThread:
         if not self.threadlist:
             raise Exception("Thread of mails not created")
 
-        rootmails = list(filter(lambda m: m.isRoot(), self.threadlist))
-        rootmails = sorted(rootmails, reverse=True)
-        return rootmails[0]
+        rootmails = list(filter(lambda m: m.mailid == self.threadid, self.threadlist))
+        rootmail = sorted(rootmails, reverse=True)[0]
+        rootmail.RootMail = None
+        rootmail.ParentMail = None
+
+        return rootmail
+
+    #Get ref number, which is the parent number, unless it has changed later in the thread or has been s/s by admin error
+    def getRefNo(self) -> str:
+        if not self.threadlist:
+            raise Exception("Thread of mails not created")
+
+        #first, check for admin error
+        errormails = list(filter(lambda m : m.mailtypename == "Admin Error" and m.formfields, self.threadlist))
+        if errormails:
+            errormail = sorted(errormails, key=lambda m: m.mailid, reverse=True)[0]
+            newref = errormail.getFormFieldVal("New Reference Number")
+            if newref:
+                return newref
+
+        #check for differing refnos
+        refnos = list(set([m.refno for m in self.threadlist]))
+        if len(refnos) > 1:
+            return self.getLatestMail(self.threadlist).refno #take the latest ref number
+
+        elif len(refnos) == 1:
+            return refnos[0]
+
+        else:
+            raise Exception("No ref number found")
 
     #return the last valid child mail of the thread
     def getLatestMail(self, maillist : list[AconexMail]) -> AconexMail:
         if not maillist:
             raise Exception("Thread of mails not created")
 
+
         #nasty solution - whichever mail has the highest mailid should be the latest
-        amailsbyID = sorted(maillist, key=lambda m: m.mailid, reverse=True)
+        amailsbyID = sorted(list(filter(lambda m : m.mailtypename != "Admin Error", maillist)),
+                            key=lambda m: m.mailid, reverse=True)
 
         return amailsbyID[0]
 
@@ -411,9 +487,6 @@ class AconexThread:
 
 EMTEMPLATEPATH = r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - Docs\General\#Other Files\Aconex\emails"
 
-#Abstract
-
-
 def getThisMail(threadXML: [ET.Element], mailid: str) -> ET.Element:
     thisMailXML = list(filter(lambda m: m.get("MailId") == mailid, threadXML))
     if len(thisMailXML) != 0:
@@ -426,17 +499,18 @@ def getThisMail(threadXML: [ET.Element], mailid: str) -> ET.Element:
             if foundMail is not None:
                 return foundMail
 
-def readThread(threadXML: [ET.Element], mailid: str) -> ET.Element:
+def readThread(threadXML: [ET.Element], mailid: str, parentid : str) -> (ET.Element, str):
     thisMailXML = list(filter(lambda m: m.get("MailId") == mailid, threadXML))
     if len(thisMailXML) == 0 and len(threadXML) > 0:
         for mailXML in threadXML:
+            parentid = mailXML.get("MailId")
             newthreadXML = mailXML.findall("Replies/Mail")
             if len(newthreadXML) > 0:
-                foundMail = readThread(newthreadXML, mailid)
+                foundMail, parentid = readThread(newthreadXML, mailid, parentid)
                 if foundMail is not None:
-                    return foundMail
+                    return foundMail, parentid
     else:
-        return thisMailXML[0]
+        return thisMailXML[0], parentid
 
 def getProjectInviteMailID(mailtypes: list[AconexMailType]) -> str:
     # Advice mail type is for HB Test
@@ -481,47 +555,6 @@ def searchMail(config, luceneQuery: str, mailTypes: list[AconexMailType]) -> lis
 
     return filterMails
 
-
-def getrfithread(project: Project, filterMails : list[AconexMail], mtDict)-> list[dict]:
-    # We now have all the RFI mails, we need to figure out the threads
-    allRows = []
-
-    for rfimail in filterMails:
-        thisRow = {}
-        thisRow["Latest Correspondence"] = rfimail.mailno
-        if rfimail.isRoot():
-            thisRow["Reference Number"] = rfimail.mailno
-        # if the 'rfi' mail was not the start of the thread
-        else:
-            thisRow["Reference Number"] = rfimail.RootMail.mailno
-
-        rfimail.setMailType(mtDict)  # set the AconexMaiLType object
-        thisRow["Subject"] = rfimail.subject
-        thisRow["Originally From"] = rfimail.getFromOrg()
-        thisRow["Date RFI Sent"] = rfimail.getDateTimeSent()
-        thisRow["(Helper) Hyperlink"] = rfimail.getHyperlink()
-        thisRow["Comments"] = rfimail.comments
-        thisRow["RFI Description"] = rfimail.getFormFieldVal(project.getRFISetup()[0])
-        thisRow["Discipline(s)"] = rfimail.getFormFieldVal(
-            project.getRFIDiscSetup())  # it might not actually have one if it's a sc rfi, but try anyway
-        thisRow["RFI Response"] = ""  # nothing for now
-        thisRow["Date RFI Responded"] = ""
-        thisRow["Ball in Court"] = ""
-        thisRow["Status"] = ""  # for now
-        thisRow["Date Closed"] = rfimail.getClosedOutDate()
-
-        # if RFI not replied to
-        if not rfimail.Replies:
-            thisRow["Status"] = rfimail.status
-            getBallInCourt(rfimail, allRows, thisRow)
-            allRows.append(thisRow)
-        else:
-            replies = rfimail.Replies
-            getReplies(project, rfimail, replies, allRows, thisRow)  # allRows will be auto updated because the dict is a pointer
-
-    return allRows
-
-
 # the ball in court is everyone who it was sent to who hasn't replied, so add a new row for each org
 def getBallInCourt(mail: AconexMail, allRows, thisRow):
     toOrgs = mail.getBallInCourt()
@@ -532,65 +565,6 @@ def getBallInCourt(mail: AconexMail, allRows, thisRow):
         firstRow = thisRow.copy()
         firstRow["Ball in Court"] = org
         allRows.append(firstRow)
-
-def getReplies(project : Project, ogMail, replies, allRows, thisRow):
-    for replyMail, mRType in replies:
-        thisRow["Latest Correspondence"] = replyMail.mailno
-        replyMail.viewMailMetadata()  # ensure mail metadata and replies are loaded
-        if mRType == "REPLY":
-            # if rfi reply mail type
-            if replyMail.mailtypename in project.getRFIReplySetup()[1]:
-                thisRow["Discipline(s)"] = replyMail.getFormFieldVal(project.getRFIDiscSetup())
-                thisRow["RFI Response"] = replyMail.getFormFieldVal(project.getRFIReplySetup()[0])
-                thisRow["Date RFI Responded"] = replyMail.getDateTimeSent()
-                thisRow["Status"] = ogMail.status
-
-                # if it's not marked as closed out, the ball in court is the sender, who needs to reply or close out
-                thisRow["Ball in Court"] = "N/A" if ogMail.isClosed() else ogMail.getFromOrg()
-
-            # if a gc / other mail type
-            else:
-                if replyMail.isOutstanding():  # if this gc is awaiting a response
-                    thisRow["Status"] = replyMail.status
-                    getBallInCourt(replyMail, allRows, thisRow)
-                    thisRow["Comments"] = replyMail.body  # this might not be the best way of doing it
-
-        elif mRType == "FORWARD":
-            # if fwded as rfi
-            if replyMail.mailtypename in project.getRFISetup()[1]:
-                thisRow["RFI Description"] = replyMail.getFormFieldVal(project.getRFISetup()[0])
-                thisRow["Date RFI Sent"] = replyMail.getDateTimeSent()
-                thisRow["Discipline(s)"] = replyMail.getFormFieldVal(project.getRFIDiscSetup())
-                thisRow["RFI Response"] = ""  # nothing for now
-                thisRow["Date RFI Responded"] = ""
-
-                # if fwded RFI not replied to
-                if not replyMail.Replies:
-                    thisRow["Status"] = replyMail.status
-                    getBallInCourt(replyMail, allRows, thisRow)
-
-            # if fwded as response to rfi
-            if replyMail.mailtypename in project.getRFIReplySetup()[1]:
-                thisRow["RFI Response"] = replyMail.getFormFieldVal(project.getRFIReplySetup()[0])
-                thisRow["Date RFI Responded"] = replyMail.getDateTimeSent()
-                thisRow["Status"] = "Responded"
-                thisRow["Ball in Court"] = ogMail.getFromOrg()
-
-            # if fwded as gc / other mail
-            else:
-                if replyMail.isOutstanding():  # if this gc is awaiting a response
-                    thisRow["Status"] = replyMail.status
-                    getBallInCourt(replyMail, allRows, thisRow)
-                    thisRow["Comments"] = replyMail.body  # this might not be the best way of doing it
-
-        rmReplies = replyMail.Replies
-
-        if len(rmReplies) > 0:
-            newRow = thisRow.copy()
-            getReplies(project, replyMail, rmReplies, allRows, newRow)
-
-        else:
-            allRows.append(thisRow)
 
 # wrapper to search the inbox and the sent box
 def getMailList(config, luceneQuery) -> [str]:
@@ -606,13 +580,14 @@ def createAMails(config, mailsReturnedXML: [str], filterTypes: dict) -> list[Aco
         mailid = mailXML.get("MailId")
         aMail = AconexMail(config=config, mailid=mailid, mailXML=mailXML)
 
+        #mailthread = AconexThread(config, aMail.threadid)
+
         # if we already have a mail obj for this ref number, exit
         if aMail.refno == prevRef:
             continue
 
-        aMail.setMailType(filterTypes)
-        aMail.viewMailMetadata()
         if not aMail.isVoid():
+            aMail.setMailType(filterTypes)
             aMails.append(aMail)
             prevRef = aMail.refno
 
@@ -635,14 +610,25 @@ def getMailsForMailbox(config, mailbox, luceneQuery) -> [ET.Element]:
     searchXml = getPages(headers, parameters, baseurl, "searching the mailbox")
     return searchXml
 
-def searchForMail(config, mailno: str) -> AconexMail:
+def searchForMail(config, mailno: str, threadid : str = "") -> AconexMail:
     luceneQuery = valQuery(config, mailno)
-
     filterMails = getMailList(config, luceneQuery)
-    mailDict = dict.fromkeys([m.get("MailId") for m in filterMails])
-    assert len(mailDict) == 1  # there should be only one mail with that mail number
+    mailDict = {m.get("MailId") : m for m in filterMails}
 
-    return AconexMail(config, mailid="", mailXML=filterMails[0])
+
+    if len(mailDict) == 1:
+        return AconexMail(config, mailid="", mailXML=filterMails[0])
+
+    # Sometimes there may be more than one if i manually renumbered. I need the one with the same threadid
+    elif len(mailDict) > 1:
+        for mid, m in mailDict.items():
+            AMail = AconexMail(config, mailid=mid, mailXML=m)
+            AMail.viewMailMetadata()
+            if AMail.threadid == threadid:
+                return AMail
+
+    raise LookupError("Cannot match to a single mail using the number %s" % mailno)
+
 
 def valQuery(config, mailno: str) -> str:
     #these are all the valid chars in the mail no. any invalid characters, replace with ?

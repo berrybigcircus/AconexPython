@@ -73,8 +73,26 @@ class Project():
             return "CLCC_9907-HBC-LCC-XX-L-W-9904"
         elif self.__projectCode == "51023":
             return "CMCC_51023-HBC-MCC-XX-L-W-9904"
+        elif self.__projectCode == "020261":
+            return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7904"
         else:
             return "{}-HBC-XX-XX-L-X-9904".format(self.__projectCode)
+
+    def getWFTrackerNumber(self) -> str:
+        if self.__projectCode == "JFW":
+            return "{}-HBC-XX-XX-L-W-79905".format(self.__projectCode)
+        elif self.__projectCode == "9910":
+            return "CNJC_9910-HBC-NJC-XX-L-W-9905"
+        elif self.__projectCode == "9961":
+            return "CTJC_9661-HBC-TJC-XX-L-W-9905"
+        elif self.__projectCode == "9907":
+            return "CLCC_9907-HBC-LCC-XX-L-W-9905"
+        elif self.__projectCode == "51023":
+            return "CMCC_51023-HBC-MCC-XX-L-W-9905"
+        elif self.__projectCode == "020261":
+            return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7905"
+        else:
+            return "{}-HBC-XX-XX-L-X-9905".format(self.__projectCode)
 
     #return the HB org id for UK1 or EA1 (pre-saved rather than from a get request)
     def getMyOrgID(self) -> str:
@@ -96,6 +114,12 @@ class Project():
             case _:
                 return (["Early Warning Notice"], ["Response to Early Warning Notice"])
 
+    def getGCMailID(self) -> str:
+        if self.__projectCode == "HBT":
+            return "1879048557"
+
+        else:
+            return "268435877"
 
     #this is which mailing groups to auto-transmit the trackers to
     def getDistributeMGs(self):
@@ -111,14 +135,24 @@ class Project():
     def getRFITrackerLocation(self) -> str:
         return "{}\\d_Mail\\RFIs\\Trackers\\{}Exported Data.xlsx".format(self.folderroot, self.projectCodePrefix())
 
+    def getWFExportDataLocation(self) -> str:
+        return "{}\\b_Workflow\\Trackers\\{}ExportedData.xlsx".format(self.folderroot, self.projectCodePrefix())
+
     def getMailTemplateLocation(self) -> str:
         return "{}\\d_Mail\\Import\\{}Mail_Template.xlsx".format(self.folderroot, self.projectCodePrefix())
 
     def getProjectDirectoryLocation(self) -> str:
         return "{}\\a_NewUser\\PDirectories\\{}Project Directory.xlsx".format(self.folderroot, self.projectCodePrefix())
 
-    def getPickleLocation(self) -> str:
+    def getRFIPickleLocation(self) -> str:
         return "{}\\d_Mail\\RFIs\\Pickle\\{}mails.pkl".format(self.folderroot, self.projectCodePrefix())
+
+    def getWFPickleLocation(self) -> str:
+        return "{}\\b_Workflow\\Pickle\\{}mails.pkl".format(self.folderroot, self.projectCodePrefix())
+
+    def getRoomCoordsLocation(self) -> str:
+        return "{}\\c_Field\\GeotaggedPhotos\\{}RoomCoords.csv".format(self.folderroot, self.projectCodePrefix())
+
 
 def projectSelection(debug: [] = []) -> Project:
     if len(debug) > 0:

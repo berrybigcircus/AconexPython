@@ -2,7 +2,7 @@
 🔵 = most ambitious
 
 # [a_NewUser](https://github.com/spiritedgravity/AconexPython/tree/master/a_NewUser "a_NewUser")
-- [ ] 🔴 Update new users excel tracker
+- [x] 🔴 Update new users excel tracker
 - [ ] Check HB users against the confidential list. Update confidential docs to add all HB users  
 - [ ] 🔵 Auto run when new order received in inbox. OCR order for Aconex contacts?
 - [ ] Auto add companies to Field directory - is it possible? Add to Originator field instead

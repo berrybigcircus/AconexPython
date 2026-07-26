@@ -1,5 +1,5 @@
 import csv
-import pathlib
+import os
 
 import requests #for making http requests
 import json #for reading json
@@ -9,22 +9,23 @@ import re #regex
 import webbrowser
 import datetime
 import pandas
-import win32com.client
+import win32com
+
+from openpyxl import load_workbook
 
 from Setup.APIcommon import session, getAPIResponse, indexInput, cleanOrgName, SelLogIn, loadCookies, getPages
 from Setup.Mail import getProjectInviteMailID, openDraftLink
 from Setup.Directory import OutlookMail, NewUserEmail, NewOrgEmail, getMailingGroups, findMailingGroup, \
     createMailingGroup
+from Setup.Project import getProjectsList
 from Setup.config import config
+from Setup.Outlook import connect, getEmAddress
 
-CSVPATH = r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - Docs\General\#Other Files\Aconex\OrgAdminList.csv"
 
-NUTRACKERPATH = r"C:\Users\nicole.millinship\OneDrive - Henry Brothers Ltd\CLP - #Docs\General\#Other Files\Aconex\Aconex New Users Tracker.xlsm"
 nuTracker = { #the headings of the new user tracker
     "User": [],
     "Company": [],
     "Project": [],
-    "Org Admin(s)": [],
     "Done?": [],
     "Action with": [],
     "Comments": [],
@@ -32,11 +33,10 @@ nuTracker = { #the headings of the new user tracker
     "Date Completed": [],
 }
 
-EMAIL1ID = "http://schemas.microsoft.com/mapi/id/{00062004-0000-0000-C000-000000000046}/80850102"
-
 class OutlookContact:
     def __init__(self, contactitem, aconexid):
         self.contactitem = None
+        self.__fullname : str = None
         self.__email : str = None
         self.__mobile : str = None
         self.__role : str = None
@@ -45,34 +45,25 @@ class OutlookContact:
         if contactitem:
             config.logger.info("Creating OutlookContact object")
             self.contactitem = contactitem
-            self.__email = self.getEmAddress(contactitem)
+            self.__fullname = contactitem.FullName
+            self.__email = getEmAddress(contactitem)
             self.__mobile = contactitem.MobileTelephoneNumber
             self.__role = contactitem.JobTitle
             self.__aconexID = contactitem.GovernmentIDNumber
             self.setaconexid(aconexid)
-            config.logger.debug(", ".join([self.__email, self.__mobile, self.__role, self.__aconexID]))
+            config.logger.debug(", ".join([self.__fullname, self.__email, self.__mobile, self.__role, self.__aconexID]))
 
-    def getEmAddress(self, contact) -> str:
-        if contact.Email1AddressType == "SMTP":
-            return contact.Email1Address
+    def addToContacts(self, contactsfolder):
+        self.contactitem = contactsfolder.Items.Add("IPM.Contact")
+        self.contactitem.Email1Address = self.email()
+        self.contactitem.FullName = self.__fullname
+        self.contactitem.MobileTelephoneNumber = self.mobile()
+        self.contactitem.JobTitle = self.role()
+        self.contactitem.GovernmentIDNumber = self.getaconexid()
+        self.contactitem.Save()
 
-        elif contact.Email1AddressType == "EX":
-            outlook = win32com.client.Dispatch("Outlook.Application").GetNameSpace('MAPI')
-            propertyaccessor = contact.PropertyAccessor
-
-            recipientEntryID = propertyaccessor.BinaryToString(propertyaccessor.GetProperty(EMAIL1ID))
-            recipient = outlook.Application.Session.GetRecipientFromID(recipientEntryID)
-
-            if recipient and recipient.Resolve() and recipient.AddressEntry:
-                euser = recipient.AddressEntry.GetExchangeUser()
-                em = euser.PrimarySmtpAddress
-
-                config.logger.debug("EXC email converted to {em}".format(em=em))
-                return em
-
-            else: return ""
-
-        else: return ""
+    def already_exists(self) -> bool:
+        return self.contactitem is not None
 
     def email(self) -> str:
         return self.__email if self.__email else ""
@@ -83,12 +74,28 @@ class OutlookContact:
     def role(self) -> str:
         return self.__role if self.__role else ""
 
+    def getaconexid(self) -> str | None:
+        return self.__aconexID
+
     def setaconexid(self, aid : str):
         if not self.__aconexID:
             self.__aconexID = aid
-            self.contactitem.GovernmentIDNumber = aid
-            self.contactitem.Save()
-            config.logger.info("Outlook Contact updated with ID {i}".format(i=self.contactitem.GovernmentIDNumber))
+            if self.contactitem is not None:
+                self.contactitem.GovernmentIDNumber = aid
+                self.contactitem.Save()
+                config.logger.info("Outlook Contact updated with ID {i}".format(i=self.contactitem.GovernmentIDNumber))
+
+    def setfullname(self, fullname : str):
+        self.__fullname = fullname
+
+    def setemail(self, email : str):
+        self.__email = email
+
+    def setmobile(self, mobile : str):
+        self.__mobile = mobile
+
+    def setrole(self, role : str):
+        self.__role = role
 
 def searchForCompany(companyname, usersFilter):
     parameters = {"org_name": companyname}
@@ -102,67 +109,83 @@ def globalDirectorySearch(parameters: dict) -> (str, OutlookMail):
     usersFilter = "SearchResults/Directory"
     userXML, _ = directorySearch(url, usersFilter, True)
 
-    if userXML is None: #if not in global directory
-        nuTracker["Done?"].append("No")
-
-        companyname = cleanOrgName(input("Enter the company name: "))
-        orgid, orgname = searchForCompany(companyname, usersFilter)
-
-        #If company not found in directory
-        if orgid is None:
-            nuTracker["Company"].append(companyname) #you may need to edit later
-            nuTracker["Action with"].append("User")
-            nuTracker["Comments"].append("New org")
-            omail = NewOrgEmail(config.project())
-            return "neworg", omail
-
-        orgadmins : list[str] = None
-        datechecked : datetime.datetime = None
-
-        # look up org id in csv to find org admins
-        orgname, orgadmins, datechecked = csvOrgAdminList.get(orgid) or (_, None, None)
-
-        #no data in csv or last checked too long ago
-        while orgadmins is None or datechecked < (datetime.datetime.today() - datetime.timedelta(days=DAYSLIMIT)):
-            jsonRes = FindOrgAdmins(orgid)
-            if jsonRes is None:
-                return "Error", None
-            config.logger.debug(jsonRes)
-            orgadmins = parseOrgAdmins(json.loads(jsonRes), False)
-
-            if orgadmins is None:
-                tryagain: str = input("Do you want to search company name again? (Y/N)")
-                if tryagain.lower() != "y":
-                    nuTracker["Company"].append(companyname)  # you may need to edit later
-                    nuTracker["Action with"].append("User")
-                    nuTracker["Comments"].append("New org")
-                    omail = NewOrgEmail(config.project())
-                    return "neworg", omail
-
-            else:
-                datechecked = datetime.datetime.now()
-                break
-
-        updateOrgAdminCSV(orgid, orgname, orgadmins, datechecked)
-        config.info("Drafting email to org admins - %s" % ", ".join(orgadmins))
-
-        nuTracker["Action with"].append("Org admin")
-        nuTracker["Comments"].append("New user")
-        omail = NewUserEmail(config.project(),orgadmins)
-        return "newuser", omail
+    newuser : bool = False
 
     #If in global directory
-    else:
-        orgname = userXML.find('TradingName').text #the trading name is what you're actually searching for on the directory screen
+    if userXML is not None:
+        companyname = userXML.find('TradingName').text #the trading name is what you're actually searching for on the directory screen
         username = userXML.find('UserName').text
 
-        helperparams = {"PROJECT_ID": config.project().projectID(),
-                        "ORG_NAME": orgname,
-                        "LAST_NAME": username.split(' ')[-1]}
-        urlhelper = config.env() + "/hub/index.html?mainTarget=" + quote_plus("/SearchDirectory?DIRECTORY=ACONEX&") + quote_plus(urlencode(helperparams))
-        webbrowser.open(urlhelper)
-        input("Opening link, please add them to the required project...")
-        return "rerun", None
+        #If user is a guest, ask how to proceed
+        if userXML.find("SearchResultType").text == "GUEST_TYPE":
+            inputCheck = input("User %s has been found, but they are a guest. Is a guest account ok for this project? (Y/N): " % username)
+            if inputCheck.upper() != "Y":
+                newuser = True
+
+        if not newuser:
+            helperparams = {"PROJECT_ID": config.project().projectID(),
+                            "ORG_NAME": companyname,
+                            "LAST_NAME": username.split(' ')[-1]}
+            urlhelper = config.env() + "/hub/index.html?mainTarget=" + quote_plus("/SearchDirectory?DIRECTORY=ACONEX&") + quote_plus(urlencode(helperparams))
+            webbrowser.open(urlhelper)
+            input("Opening link, please add them to the required project...")
+            return "rerun", None
+
+    elif userXML is None: #if not in global directory
+        companyname = cleanOrgName(input("Enter the company name: "))
+
+    nuTracker["Done?"].append("No")
+    nuTracker["Date Completed"].append('')
+
+    orgid, orgname = searchForCompany(companyname, usersFilter)
+
+    #If company not found in directory
+    if orgid is None:
+        nuTracker["Company"].append(companyname) #you may need to edit later
+        nuTracker["Action with"].append("User")
+        nuTracker["Comments"].append("New org")
+        omail = NewOrgEmail(config.project())
+        return "neworg", omail
+
+    orgadmins : list[str] = None
+    datechecked : datetime.datetime = None
+
+    # look up org id in csv to find org admins
+    orgname, orgadmins, datechecked = csvOrgAdminList.get(orgid) or (_, None, None)
+
+    #no data in csv or last checked too long ago
+    while orgadmins is None or datechecked < (datetime.datetime.today() - datetime.timedelta(days=DAYSLIMIT)):
+        jsonRes = FindOrgAdmins(orgid)
+        if jsonRes is None:
+            return "Error", None
+
+        orgadmins = parseOrgAdmins(json.loads(jsonRes), False)
+
+        if orgadmins is None:
+            tryagain: str = input("Do you want to search company name again? (Y/N)")
+            if tryagain.lower() != "y":
+                nuTracker["Company"].append(companyname)  # you may need to edit later
+                nuTracker["Action with"].append("User")
+                nuTracker["Comments"].append("New org")
+                omail = NewOrgEmail(config.project())
+                return "neworg", omail
+
+            else:
+                orgid, orgname = searchForCompany(companyname, usersFilter)
+                orgname, orgadmins, datechecked = csvOrgAdminList.get(orgid) or (_, None, None)
+
+        else:
+            datechecked = datetime.datetime.now()
+            break
+
+    updateOrgAdminCSV(orgid, orgname, orgadmins, datechecked)
+    config.info("Drafting email to org admins - %s" % ", ".join(orgadmins))
+
+    nuTracker["Company"].append(orgname)
+    nuTracker["Action with"].append("Org admin")
+    nuTracker["Comments"].append("New user")
+    omail = NewUserEmail(config.project(),orgadmins)
+    return "newuser", omail
 
 
 # Find out the org admin(s)
@@ -193,7 +216,7 @@ def bulkUpdateCSV():
     oglen = len(csvOrgAdminList)
     DAYSLIMIT: int = 90
 
-    projectsList: dict[str, list] = ProjectClasses.getProjectsList()
+    projectsList: dict[str, list] = getProjectsList()
     projecturls = [config.ACONEXENV + "/api/projects/" + pid for pid in projectsList.keys()]
     orgs: dict[str, str] = {}
 
@@ -245,7 +268,7 @@ def getAllOrgsOnProject(projecturl : str) -> dict[str, str]:
 
 #Write whole org admin based on dictionary var
 def writeOrgAdminCSV(csvOrgAdminList):
-    csvfile = open(CSVPATH, 'w', newline='')
+    csvfile = open(config.getOrgCSVLocation(), 'w', newline='')
     writer = csv.writer(csvfile, delimiter=',')
     writer.writerow(["Org ID", "Company", "Org Admin(s)", "Date Checked"]) #put header in
     rows = [[k, v[0], "; ".join(v[1]), v[2].strftime("%d/%m/%Y")] for k, v in csvOrgAdminList.items()]
@@ -264,13 +287,13 @@ def updateOrgAdminCSV(orgid : str, orgname : str, orgadmins : list[str], dateche
 
         rows = [[k, v[0], "; ".join(v[1]), v[2].strftime("%d/%m/%Y")] for k, v in csvOrgAdminList.items()]
 
-        csvfile = open(CSVPATH, 'w', newline='')
+        csvfile = open(config.getOrgCSVLocation(), 'w', newline='')
         writer = csv.writer(csvfile, delimiter = ',')
         writer.writerow(["Org ID", "Company", "Org Admin(s)", "Date Checked"]) #put header in
         writer.writerows(rows)
         config.logger.info("Updated row %s in orgadmins.csv" % orgname)
     else:
-        csvfile = open(CSVPATH,'a', newline='')
+        csvfile = open(config.getOrgCSVLocation(),'a', newline='')
         writer = csv.writer(csvfile, delimiter = ',')
         writer.writerow(newRow)
         csvfile.close()
@@ -355,11 +378,11 @@ def directorySearch(url, searchfilter, userSearch=True) -> tuple[ET.Element | No
 def addToAll(userData):
     #check for existence of All group
     jsonMG = getMailingGroups(config)
-    
+
     mgID, mgUsers = findMailingGroup(jsonMG, "^All($| ).*")
 
     if mgID == 0: #'All' not found
-        mgID, mgUsers = createMailingGroup("All")
+        mgID, mgUsers = createMailingGroup(config, "All")
 
     usersToAdd = [dirUser.find("UserId").text for dirUser in userData if int(dirUser.find("UserId").text) not in mgUsers] #list the user ID of users not already in the mailing group
 
@@ -417,7 +440,7 @@ def addToGroup(userData):
                 config.error("There was an error adding user %s to the mailing group. %s" % (userName, reason))
             else:
                 config.info("User %s added to mailing group successfully." % userName)
-        
+
         else:
             config.info("User %s is already in the mailing group." % userName)
 
@@ -425,13 +448,14 @@ def draftTransmittal(userData):
     #get HBDC All #Docs
     HBDCALLDOCS = "matchAll:1 confidential:0 AND NOT (SharedWith_singleSelect:Internal* OR SharedWith_singleSelect:Shared*)" #manual recreation of this search
     parameters = {"search_type": "PAGED", #PAGED, meaning return results by "pages" of variable size.
-                  "return_fields": "docno,title,doctype,confidential,SharedWith_singleSelect", 
+                  "return_fields": "docno,title,doctype,confidential,SharedWith_singleSelect",
                   "search_query": HBDCALLDOCS,
                   "page_size": "500"
-                  } 
+                  }
 
     headers = {'Authorization': config.bearer()}
     baseurl = config.projecturl() + "/register"
+
     searchXml = getPages(headers, parameters, baseurl, " searching the document register")
 
     docIds = [doc.attrib['DocumentId'] for doc in searchXml]
@@ -468,7 +492,7 @@ def addUsersAndDocs(xmlData, userIds, docIds): #put users and documents into mai
         xmlData = xmlData.replace("TO_USERS_GO_HERE", userStr)
 
     xmlData = xmlData.replace("TO_USERS_GO_HERE\n", "")
-    
+
     for dId in docIds:
         attachStr = "--myboundary\n\nX-documentId: " + dId + "\n\n"
         xmlData = xmlData + attachStr
@@ -485,7 +509,7 @@ def addWorkingDays(startdate, daysToAdd): #fcking can't believe i have to includ
         if weekday >= 5: # mon = 0, sat = 5, sun = 6
             continue #skip weekends
         busDaysToAdd -= 1
-    
+
     return currentdate
 
 def draftProjectInvite(userData):
@@ -520,7 +544,7 @@ def draftProjectInvite(userData):
     if response.status_code != 200:
         config.error("There was an error getting data about the draft mail. %s" % response.reason)
         return
-    
+
     #create mail
     url = config.projecturl() + "/mail?is_draft=true"
     headers = {'Authorization': config.bearer(),
@@ -539,7 +563,7 @@ def draftProjectInvite(userData):
     resDate = resDate.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     xmlData = xmlData.replace("RESPONSE_REQ_DATE_HERE", str(resDate))
     xmlData = xmlData.replace("MAILID_GOES_HERE", getProjectInviteMailID(config.mailtypes()))
-    
+
     mBody = "<![CDATA[" + draftMailXML.find('MailData').text + "]]>"
     xmlData = xmlData.replace("MAIL_BODY_HERE", mBody)
 
@@ -569,6 +593,12 @@ dirCreator = { #headings for csv for project directory
 }
 
 def createProjectDirectory():
+    #connect to open outlook application - must be open on the machine for this to work
+    outlook = connect()
+
+    contactsfolder = outlook.GetDefaultFolder(10)
+    mycontacts = contactsfolder.Items
+
     parameters = {"show_groups": "true"}
     url = config.projecturl() + "/directory?" + urlencode(parameters)
     headers = {'Authorization': config.bearer()}
@@ -584,10 +614,12 @@ def createProjectDirectory():
         if re.search(filterOutRegex, groupname):
             continue
         else:
+            mycontacts = contactsfolder.Items
             bracketsplit = groupname.split("(")
-            if len(bracketsplit) != 2: continue
+
             companyname = bracketsplit[0]
-            descworks = bracketsplit[1].replace(")","")
+            if len(bracketsplit) == 2:
+                descworks = bracketsplit[1].replace(")","")
 
             #find users in this mailing group
             url =  config.projecturl() + "/groups/" + groupid
@@ -611,7 +643,16 @@ def createProjectDirectory():
             for userXml in searchXml:
                 lastname = userXml.find("UserLastName").text.title()
                 fullname = userXml.find("UserFirstName").text.title() + " " + lastname
-                contact = outlooklookup(fullname,lastname,companyname,userXml.find("UserId").text)
+                aconexid = userXml.find("UserId").text
+                contact = outlooklookup(mycontacts, fullname,lastname,groupname, aconexid)
+
+                if not contact.already_exists():
+                    #add to outlook contactsc
+                    contact.setfullname(fullname)
+                    contact.setrole(userXml.find("JobTitle").text)
+                    contact.setaconexid(userXml.find("UserId").text)
+                    contact.setmobile(cleanmobile(userXml.find("Mobile").text or userXml.find("Phone").text))
+                    contact.addToContacts(contactsfolder)
 
                 dirCreator["Name"].append(fullname)
                 dirCreator["Role"].append(userXml.find("JobTitle").text or contact.role())
@@ -634,11 +675,14 @@ def createProjectDirectory():
         fullname = user.find('UserName').text
         if fullname == "HB Drawings": continue
 
-        contact = outlooklookup(fullname, fullname.split(" ")[1], "Henry Brothers", user.find("UserId").text)
+        contact = outlooklookup(mycontacts, fullname, fullname.split(" ")[1], "Henry Brothers", user.find("UserId").text)
 
         dirCreator["Name"].append(fullname)
         dirCreator["Role"].append(user.find("JobTitle").text)
-        dirCreator["Contact Number"].append(user.find("Mobile").text or contact.mobile())
+        if user.find("Mobile") and not contact.mobile():
+            dirCreator["Contact Number"].append(cleanmobile(user.find("Mobile").text))
+        else:
+            dirCreator["Contact Number"].append(contact.mobile())
         dirCreator["Company / Works"].append("Henry Brothers")
         dirCreator["Address"].append("32 Eldon Road, Beeston, Nottingham, NG9 6DZ")
         dirCreator["Email"].append(contact.email())
@@ -654,18 +698,20 @@ def createAddress(userXml) -> str:
     addressComb = ", ".join(filter(None, addressComb))
     return addressComb
 
+def cleanmobile(mobile : str) -> str:
+    if mobile:
+        regexpattern = r"^\+44\s?7(\d{3})\s?(\d{3})\s?(\d{3,4})$"
+        regexreplace = r"07\1 \2 \3"
+
+        return re.sub(regexpattern, regexreplace, mobile)
+
+    else:
+        return ""
+
+
 #Lookup person's name in my outlook contacts and return them as a Contact object
-def outlooklookup(fullname : str, lastname : str, company : str, aconexid : str) -> OutlookContact:
+def outlooklookup(mycontacts, fullname : str, lastname : str, company : str, aconexid : str) -> OutlookContact:
 
-    #connect to open outlook application - must be open on the machine for this to work
-    try:
-        outlook = win32com.client.Dispatch("Outlook.Application").GetNameSpace('MAPI')
-
-    except AttributeError:
-        raise AttributeError("Could not run. Outlook is not open and contacts could not be accessed.")
-
-    contactsfolder = outlook.GetDefaultFolder(10)
-    mycontacts = contactsfolder.Items
     lastname = lastname.replace("'","_") #wildcard any apostrophes
 
     #different filters to perform to try to match to outlook contacts
@@ -676,7 +722,7 @@ def outlooklookup(fullname : str, lastname : str, company : str, aconexid : str)
                 ]
     return filtercontacts(mycontacts, sfilters, aconexid)
 
-def filtercontacts(mycontacts, sfilters, aconexid) -> OutlookContact:
+def filtercontacts(mycontacts, sfilters : list[str], aconexid : str | None) -> OutlookContact:
     filteredcontacts = []
     print(sfilters)
     index = 0
@@ -732,11 +778,10 @@ def main():
     file = open(FOLDERPATH + "\\userList.txt", "r")
     textLines = [line.rstrip() for line in file]
     textLines = textLines[1::] #remove top info line
-    file.close
+    file.close()
 
     valid = True #if all the inputs are valid
     userData = []
-    skippedusers = []
 
     global csvOrgAdminList
     csvOrgAdminList = loadcsv()
@@ -768,7 +813,7 @@ def main():
             nuTracker["User"].append(tempname) #ideally want it formatted correctly so don't want this to be happening
 
         nuTracker["Date Started"].append(strdatenow)
-        nuTracker["Project"].append(config.project().projectName())
+        nuTracker["Project"].append("{}{}".format(config.project().projectCodePrefix(), config.project().projectName()))
 
         #Search for this user on the project
         userXML = projectDirectorySearch(parameters)
@@ -779,7 +824,8 @@ def main():
             nuTracker["Company"].append(userXML.find('OrganizationName').text)
             nuTracker["Done?"].append("Yes")
             nuTracker["Date Completed"].append(strdatenow)
-
+            nuTracker["Action with"].append("")
+            nuTracker["Comments"].append("")
             userData.append(userXML)
 
         else: #user not found on this project
@@ -789,11 +835,17 @@ def main():
             surname = names[-1]  # last val
             forename = " ".join(names[:-1])
 
+            #TODO we need to ask for company name and search for that too
             parameters = {"given_name": forename,
                           "family_name": surname}
+
             searchstatus, omail = globalDirectorySearch(parameters)
             if searchstatus == "rerun":
                 textLines.append(iLine) #add again, we will search for them again at the end - as they should now be added to project
+                #clear row, wait for re-run to add to tracker
+                nuTracker["User"].pop()
+                nuTracker["Date Started"].pop()
+                nuTracker["Project"].pop()
 
             elif searchstatus == "neworg":
                 omail.setTo([iLine])
@@ -807,36 +859,33 @@ def main():
                 omail.draftEmail()
 
 
-    if len(userData) < 1: #if no users found
-        exit()
+    if not len(userData) < 1: #if users found
+        ##Add to All Mailing Group
+        confirm = input("Add all users to 'All' Mailing Group? (Y/N): ")
+        if confirm.upper() == "Y" or confirm.lower() == "yes": addToAll(userData)
 
-    ##Add to All Mailing Group
-    confirm = input("Add all users to 'All' Mailing Group? (Y/N): ")
-    if confirm.upper() == "Y" or confirm.lower() == "yes": addToAll(userData)
+        ##Add to Company Mailing Group
+        confirm = input("Add users to company Mailing Group? (Y/N): ")
+        if confirm.upper() == "Y" or confirm.lower() == "yes": addToGroup(userData)
 
-    ##Add to Company Mailing Group
-    confirm = input("Add users to company Mailing Group? (Y/N): ")
-    if confirm.upper() == "Y" or confirm.lower() == "yes": addToGroup(userData)
+        ##Draft transmittal of files
+        confirm = input("Draft a full transmittal to users? (Y/N): ")
+        if confirm.upper() == "Y" or confirm.lower() == "yes": transmittalSent = draftTransmittal(userData)
+        else: transmittalSent = False
 
-    ##Draft transmittal of files
-    confirm = input("Draft a full transmittal to users? (Y/N): ")
-    if confirm.upper() == "Y" or confirm.lower() == "yes": transmittalSent = draftTransmittal(userData)
-    else: transmittalSent = False
-
-    ##Draft Project Invite Mail
-    confirm = input("Draft project invite? (Y/N): ")
-    if confirm.upper() == "Y" or confirm.lower() == "yes": draftProjectInvite(userData)
+        ##Draft Project Invite Mail
+        confirm = input("Draft project invite? (Y/N): ")
+        if confirm.upper() == "Y" or confirm.lower() == "yes": draftProjectInvite(userData)
 
     print("SUMMARY")
     print("Success on: " + "\n".join([user.find('UserName').text for user in userData]))
-    print("Skipped: " + "\n".join(skippedusers))
-
-    #updateTracker() TODO
+    print(nuTracker)
+    updateTracker(config, nuTracker)
 
 #if not loaded already, load csv
 def loadcsv() -> dict:
-    csvOrgAdminList : dict[str: (str, [str], datetime.date)] #ID: [name, admins
-    csvfile = open(CSVPATH, "r", newline='')
+    csvOrgAdminList : dict
+    csvfile = open(config.getOrgCSVLocation(), "r", newline='')
     reader = csv.reader(csvfile, delimiter=',')
     next(reader)  # skip header row
 
@@ -854,33 +903,27 @@ def loadcsv() -> dict:
         csvOrgAdminList[row[0]] = (companyname, orgAdmins, datechecked)
 
     config.logger.info("Loaded csv file")
+    csvfile.close()
     return csvOrgAdminList
 
+def updateTracker(config, nuTracker):
+    numRows = len(nuTracker["User"])
 
-#TODO update new user tracker with new rows
-def updateTracker():
-    nuTracker = {
-        "User": ["Max Rebo"],
-        "Company": ["Test Company"],
-        "Project": ["HBP - HB Practice Project"],
-        "Org Admin(s)": [""],
-        "Done?": ["Yes"],
-        "Action with": [""],
-        "Comments": [""],
-        "Date Started": ["13/08/2025"],
-        "Date Completed": ["13/08/2025"]
-    }
+    NUTRACKERPATH = config.getNUTrackerLocation()
     dataframe = pandas.DataFrame(data=nuTracker)
 
-    readerdf = pandas.read_excel(NUTRACKERPATH, sheet_name="Tracker")
-    numRows = len(readerdf.index)
+    if os.path.exists(NUTRACKERPATH):
+        xl = win32com.client.Dispatch('Excel.Application')
 
-    writer = pandas.ExcelWriter(NUTRACKERPATH, mode='a', if_sheet_exists="overlay")
+        wb = xl.Workbooks.Open(NUTRACKERPATH, ReadOnly=False)
+        for index, row in dataframe.iterrows():
+            xl.Application.Run("Module1.addRow", row.tolist())
 
-    dataframe.to_excel(writer,
-                       sheet_name="Tracker",
-                       header=False,
-                       startrow=(numRows+1),
-                       index=False)
+        wb.Save()
+        wb.Close(SaveChanges=True)
+        xl.Application.Quit()
+        config.logger.info("Updated tracker excel file")
+    else:
+        config.logger.error("Cannot find tracker file.")
 
-    writer.close()
+

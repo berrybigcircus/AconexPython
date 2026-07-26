@@ -278,7 +278,7 @@ def getPages(headers: dict[str, str], parameters: dict[str, str], baseurl: str, 
     currentPageNum = 1
     while currentPageNum < totalPages:
         currentPageNum += 1
-        parameters["pageNumber"] = str(currentPageNum)
+        parameters["page_number"] = str(currentPageNum)
         url = "{u}?{p}".format(u=baseurl, p=urlencode(parameters))
         xml = getAPIResponse(url, headers, explanation)
         searchXml.extend(ET.fromstring(xml.strip()).findall('SearchResults/'))

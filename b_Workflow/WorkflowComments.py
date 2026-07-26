@@ -6,12 +6,12 @@ from xml.etree.ElementTree import Element
 
 import pandas  # for exporting to excel
 
-from Setup.config import config
-from Setup.Doc import searchForDoc
+from Setup.config import config, refreshTracker, get_modification_time
+from Setup.Doc import searchForDoc, search_for_tracker
 
 from Setup.APIcommon import getAPIResponse, convertDateTimeStr, cleanOrgName, importLastRun
 
-import pathlib
+import pickle
 
 workflowData = {
     "Document Number": [],
@@ -28,6 +28,7 @@ workflowData = {
     "Comments": [],
     "Workflow Outcome": [],
     "Latest revision?": [],
+    "Marked up file?": [],
 }
 
 def searchForWorkflow(wfReviewsXml, trackingId) -> list[Any]:
@@ -43,7 +44,9 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
     docstatus = ""
     createdby = ""
     skipcount = 0
-    returnfields = "trackingid,docno,title,revision,author,reviewstatus,reviewSource,statusid"
+    returnfields = "trackingid,docno,title,revision,author,reviewstatus,reviewSource,statusid,filename,fileSize"
+    currentfilename = ""
+    currentfilesize = ""
 
     for reviewXml in wfReviewsXml: #in case it's been in multiple reviews
         docTrackingID = reviewXml.find('DocumentTrackingId').text
@@ -51,17 +54,23 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
         #we need to run this every time because we need to know the doc's current doc number, not what it was in the WF - this is in case the number changes (WISBECH)
         if prevID is None or docTrackingID != prevID:
             docxml = searchForDoc(config, "trackingid:" + docTrackingID, returnfields)
-            docnum = docxml.find('DocumentNumber').text if docxml else reviewXml.find('DocumentNumber').text
+            docnum = docxml.find('DocumentNumber').text if docxml is not None else reviewXml.find('DocumentNumber').text
             createdby = cleanOrgName(docxml.find("Author").text) if docxml is not None else ""
             docstatus = docxml.find('DocumentStatus').text if docxml is not None else "No Longer In Use"
             currentRev = docxml.find('Revision').text if docxml is not None else ""
             docreviewoutcome = docxml.find('ReviewStatus').text if docxml is not None else ""
+            currentfilename = docxml.find("Filename").text if docxml is not None else ""
+            currentfilesize = docxml.find("FileSize").text if docxml is not None else ""
+
 
         wfstatus = reviewXml.find('WorkflowStatus').text
         wfnumber = reviewXml.find('WorkflowNumber').text
         docRev = reviewXml.find('DocumentRevision').text
         stepstatus = reviewXml.find('StepStatus').text
         stepoutcome = reviewXml.find('StepOutcome').text
+
+        OGfilename = reviewXml.find("FileName").text
+        OGfilesize = reviewXml.find("FileSize").text
 
         assigneesOrgsXML = reviewXml.findall('Assignees/Assignee/OrganizationName')
 
@@ -86,19 +95,20 @@ def addWorkflowData(wfReviewsXml, currentRev=""):
         workflowData["Date of Comments"].append(convertDateTimeStr(reviewXml.find('DateCompleted').text, "%d/%m/%Y %H:%M:%S"))
         workflowData["Comments"].append(reviewXml.find('Comments').text)
 
+
         workflowData["Workflow Outcome"].append(docreviewoutcome)
 
         workflowData["Assigned to Org"].append("\n".join(set([cleanOrgName(orgxml.text) for orgxml in assigneesOrgsXML])))
 
         workflowData["Latest revision?"].append(docRev == currentRev)
+        #Assume that if the file name or size has changed, this indicates a step has been submitted with a new version of the file and marked up. Hopefully this works pretty well
+        workflowData["Marked up file?"].append(OGfilename != currentfilename or OGfilesize != currentfilesize)
         prevID = docTrackingID
 
     config.info("Skipped %d" % skipcount)
     config.debug(str(len(workflowData["Document Number"])))
 
-def exportToExcel(fname: str, amend : bool):
-    #TODO amend = True
-
+def exportToExcel(fname: str):
     #create sheet to write the project information
     projectinfo = {
         "Project Name": [config.project().projectName()],
@@ -118,6 +128,7 @@ def exportToExcel(fname: str, amend : bool):
 
     # export the comment datas into excel
     dataframe = pandas.DataFrame(data=workflowData)  # convert into pandas data frame for exporting
+    dataframe.drop_duplicates() #remove any duplicates which might have appeared when appending new data to existing
     dataframe.to_excel(writer,
            sheet_name="RawData",
            header= True,
@@ -127,36 +138,58 @@ def exportToExcel(fname: str, amend : bool):
     writer.close()
     config.info("     Workflow data added to ExportedData.xlsx")
 
-def main(inputUseTextFile : str, forceAll : bool = False):
-    global FOLDERPATH
-    FOLDERPATH = str(pathlib.Path(__file__).parent.resolve())
-    FILEPATH : str = FOLDERPATH + "\\Trackers\\" + config.project().projectCodePrefix() + "ExportedData.xlsx"
+def main(inputUseTextFile : str, forceAll : bool = True):
+    FILEPATH : str = config.project().getWFExportDataLocation()
 
     if inputUseTextFile == "y":
         genTrackerTextFile()
     else:
         #Import the date the tracker was last ran
         lastrun : datetime.datetime = importLastRun(FILEPATH)
+        pickle_path = config.project().getWFPickleLocation()
+
         append : bool = False
         if lastrun and forceAll == False:
-            config.debug(datetime.datetime.strftime(lastrun, '%d/%m/%Y %H:%M'))
             lastrun -= datetime.timedelta(hours=0, minutes=15) #go a few minutes earlier to ensure nothing's missed
-            config.info("Getting workflow data between now (%s) and %s" % (datetime.datetime.today().strftime('%d/%m/%Y %H:%M'), datetime.datetime.strftime(lastrun, '%d/%m/%Y %H:%M')))
-            params = "&updated_after=" + datetime.datetime.strftime(lastrun, "%Y-%m-%dT%H:%M:%S.%fZ")
-            wfReviewsXml = getWorkflows(params)
-            append = True
-        else: #if could not import, run for all
-            config.warning("Could not import date last run.")
+
+            try:
+                with open(pickle_path, "rb") as f:
+                    workflowData.update(pickle.load(f))
+                f.close()
+                config.logger.info("Loaded workflow data pickle")
+
+                config.info("Getting workflow data between now (%s) and %s" % (datetime.datetime.today().strftime('%d/%m/%Y %H:%M'), datetime.datetime.strftime(lastrun, '%d/%m/%Y %H:%M')))
+                params = "&updated_after=" + datetime.datetime.strftime(lastrun, "%Y-%m-%dT%H:%M:%S.%fZ")
+                wfNewXML = getWorkflows(params)
+
+                append = True
+            except:
+                forceAll = True
+
+        if forceAll or not lastrun: #if could not import, run for all
             config.info("Generating a tracker for all documents " + config.project().projectName())
             # Generate a tracker for ALL documents
-            wfReviewsXml = getAllWorkflows()
-            append = False
+            wfNewXML = getAllWorkflows()
 
-        if len(wfReviewsXml) == 0:
+        if len(wfNewXML) == 0:
             config.warning("No new data found when searching for workflows.")
+            return
+
         else:
-            addWorkflowData(wfReviewsXml)
-            exportToExcel(FILEPATH, append)
+            addWorkflowData(wfNewXML)
+            with open(pickle_path, "wb") as f:
+                pickle.dump(workflowData, f)
+                config.logger.info("Workflow Data dictionary dumped to pickle file")
+
+            f.close()
+
+            exportToExcel(FILEPATH)
+
+            wfpath = FILEPATH.replace("ExportedData.xlsx",
+                                           "Workflow Tracker.xlsx")  # get the finalised tracker not the raw export
+
+            return uploadWFTracker(config, wfpath)
+
 
 def getAllWorkflows() -> list[Element]:
     return getWorkflows(params = "")
@@ -210,5 +243,22 @@ def genTrackerTextFile():
         docWorkflowsXml = searchForWorkflow(wfReviewsXml, docTrackingID)
         addWorkflowData(docWorkflowsXml, docRevision)
 
-    FILEPATH : str = FOLDERPATH + "\\Trackers\\" + config.project().projectCodePrefix() + "ExportedData.xlsx"
-    exportToExcel(FILEPATH)
+    exportToExcel(config.project().getWFExportDataLocation())
+
+def uploadWFTracker(config, filepath, force_upload : bool = False):
+    if not force_upload:
+        dategen = refreshTracker(filepath)
+    else:
+        dategen = get_modification_time(filepath)
+
+    if force_upload or dategen:
+        docnumber = config.project().getWFTrackerNumber()
+        docxml = search_for_tracker(config, filepath, docnumber, dategen)
+        if docxml:
+            config.logger.info("Workflow Tracker uploaded to register.")
+
+        return True
+
+    else:
+        config.logger.warning("Tracker at %s not uploaded." % filepath)
+        return False
