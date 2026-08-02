@@ -81,8 +81,8 @@ def main():
     init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project
 
     #RUN PACKAGES
-    #newUserMain(createdirectory=False)
-    WFCommsMain()
+    newUserMain(createdirectory=False)
+    #WFCommsMain()
     #fieldMain()
     # docMain()
     #MailMain()

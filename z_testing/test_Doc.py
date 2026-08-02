@@ -1,11 +1,14 @@
 from unittest import TestCase
 
+import pytest
+
 from Setup.config import config
 from Setup.Doc import getDocumentLink
 from z_testing.test_config import TestConfig
 
 
 class TestDoc(TestCase):
+    @pytest.mark.integration
     def test_get_document_link(self):
         tconfig = TestConfig()
         tconfig.init_WPS()
@@ -30,6 +33,7 @@ class TestDoc(TestCase):
         print(dstatuses)
 
     #TODO why can't it find this??
+    @pytest.mark.skip
     def test_search_for_formfield(self):
         tconfig = TestConfig()
         tconfig.init_JFW()

@@ -1,5 +1,7 @@
 from unittest import TestCase
 
+import pytest
+
 from Setup import EAsetup, UK1setup
 from Setup.config import *
 from Setup.config import get_modification_time
@@ -44,6 +46,11 @@ class TestConfig(TestCase):
 
         return config
 
+    def test_init(self):
+        self.init_ea()
+        assert Config()
+
+    @pytest.mark.integration
     def test_get_modification_time(self):
         filepath = r"C:\Users\nicole.millinship\PycharmProjects\AconexPython\b_Workflow\Trackers\JFW - Workflow Tracker.xlsx"
 

@@ -312,7 +312,13 @@ def refreshTracker(filepath, accept_time_diff : bool = False) -> str:
         xlapp.AskToUpdateLinks = False
         xlapp.EnableEvents = False
         xlapp.Visible = True
-        wb = xlapp.Workbooks.Open(filepath)
+        try:
+            wb = xlapp.Workbooks.Open(filepath)
+        except pywintypes.com_error:
+            config.logger.error("Workbook %s not found" % filepath)
+            xlapp.Quit()
+            del xlapp
+            return None
         sheet = wb.Sheets("RawData")
         original_dategen = sheet.Range("B2").Value
 

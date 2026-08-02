@@ -108,6 +108,7 @@ class AconexMail():
         self.config: config.Config = config
         self.mailno : str = None
         self.refno : str = None
+        self.status: str = None
 
         self.mailid = mailid
         self.formfields : list[MailFormField] = None
@@ -166,7 +167,6 @@ class AconexMail():
         fromorg = fromuserXML.find("OrganizationName").text
         self.From = AconexUser(fromname, fromorg, "FROM")
 
-        self.status: str = None
         self.hyperlink: str = self.getHyperlink()  # as per usual i have to write it myself SMH
 
         self.RootMail: AconexMail
@@ -278,22 +278,6 @@ class AconexMail():
             return ffvals[0]
         return None
 
-    # def checkForNewRef(self):
-    #     #In Admin Error mail type, a project field to reset ref number is added in case the numbers get messed up
-    #     if self.mailtypename == "Admin Error" and self.formfields and not self.isVoid():
-    #         newref = self.getFormFieldVal("New Reference Number")
-    #         if newref:
-    #             self.resetrefno(newref)
-    #
-    # #change ref no for current mail, root mail, and replies
-    # def resetrefno(self, newref : str):
-    #     self.refno = newref
-    #     self.getRootMail().refno = newref
-    #     self.ParentMail.refno = newref
-    #
-    #     for repmail, _ in self.Replies:
-    #         repmail.refno = newref
-
 
     def getHyperlink(self) -> str:
         return (self.config.env() + "/hub/index.html?mainTarget=%2FViewCorrespondence%3FPROJECT_ID%3D" + self.config.project().projectID() +
@@ -306,6 +290,11 @@ class AconexMail():
 
     def getParentMail(self):
         return self.ParentMail
+
+    def getReplies(self, mailthread : AconexThread):
+        if mailthread:
+            self.Replies = mailthread.findfromID(self.mailid).Replies
+
 
     #def getMailThread(self):
         # self.Replies = []
@@ -579,8 +568,6 @@ def createAMails(config, mailsReturnedXML: [str], filterTypes: dict) -> list[Aco
     for mailXML in mailsReturnedXML:
         mailid = mailXML.get("MailId")
         aMail = AconexMail(config=config, mailid=mailid, mailXML=mailXML)
-
-        #mailthread = AconexThread(config, aMail.threadid)
 
         # if we already have a mail obj for this ref number, exit
         if aMail.refno == prevRef:

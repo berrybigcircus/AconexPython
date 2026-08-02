@@ -163,6 +163,9 @@ def getrfithreadnew(loadpickle = False, lastrun : datetime.datetime = None):
 def convertToRow(allRows: list[Any], rfimail: AconexMail, rfimailtypes, rfireplymailtypes) -> dict[Any, Any]:
     thisRow = {}
 
+    rfithread = AconexThread(config, rfimail.threadid)
+    rfimail.getReplies(rfithread)
+
     thisRow["Subject"] = rfimail.subject
     thisRow["Originally From"] = rfimail.getFromOrg()
     thisRow["Date RFI Sent"] = rfimail.getDateTimeSent()
@@ -178,7 +181,6 @@ def convertToRow(allRows: list[Any], rfimail: AconexMail, rfimailtypes, rfireply
     thisRow["Date Closed"] = rfimail.getClosedOutDate()
     thisRow["Sent to"] = ", ".join(rfimail.getToOrgs())
 
-    rfithread = AconexThread(config, rfimail.threadid)
 
     lastresponse = rfithread.getLatestMail(rfithread.threadlist)
 
