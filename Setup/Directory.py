@@ -1,8 +1,6 @@
 import json
 import re
 
-import win32com.client
-
 from Setup.APIcommon import session, getAPIResponse, postAPIResponse
 from Setup.Project import Project
 
@@ -30,6 +28,7 @@ class AconexUser():
 
 class OutlookMail:
     def __init__(self):
+        import win32com.client
         self.to : set[str] = None
         self.cc: set[str] = None
         self.subject : str = None
@@ -48,6 +47,7 @@ class OutlookMail:
         self.cc = set(ccl)
 
     def createBody(self, draftsubject):
+        import win32com.client
         # Find the draft in my Outlook drafts
         outlook = win32com.client.Dispatch("Outlook.Application").GetNameSpace('MAPI')
         draftsfolder = outlook.GetDefaultFolder(16).Items
@@ -58,6 +58,7 @@ class OutlookMail:
         self.body = draftemail.HTMLBody
 
     def draftEmail(self):
+        import win32com.client
         olMailItem = 0x0
         obj = win32com.client.Dispatch("Outlook.Application")
         newMail = obj.CreateItem(olMailItem)

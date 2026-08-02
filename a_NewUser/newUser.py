@@ -1,26 +1,22 @@
 import csv
-import os
-
-import requests #for making http requests
-import json #for reading json
-from urllib.parse import urlencode, quote_plus
-import xml.etree.ElementTree as ET #for parsing xml
-import re #regex
-import webbrowser
 import datetime
-import pandas
-import win32com
+import json  # for reading json
+import os
+import re  # regex
+import webbrowser
+import xml.etree.ElementTree as ET  # for parsing xml
+from urllib.parse import urlencode, quote_plus
 
-from openpyxl import load_workbook
+import pandas
+import requests  # for making http requests
 
 from Setup.APIcommon import session, getAPIResponse, indexInput, cleanOrgName, SelLogIn, loadCookies, getPages
-from Setup.Mail import getProjectInviteMailID, openDraftLink
 from Setup.Directory import OutlookMail, NewUserEmail, NewOrgEmail, getMailingGroups, findMailingGroup, \
     createMailingGroup
+from Setup.Mail import getProjectInviteMailID, openDraftLink
+from Setup.Outlook import connect, getEmAddress
 from Setup.Project import getProjectsList
 from Setup.config import config
-from Setup.Outlook import connect, getEmAddress
-
 
 nuTracker = { #the headings of the new user tracker
     "User": [],
@@ -908,6 +904,7 @@ def loadcsv() -> dict:
 
 def updateTracker(config, nuTracker):
     numRows = len(nuTracker["User"])
+    import win32com.client
 
     NUTRACKERPATH = config.getNUTrackerLocation()
     dataframe = pandas.DataFrame(data=nuTracker)

@@ -6,7 +6,6 @@ import pathlib
 import time
 
 import pywintypes
-import win32com.client
 
 from Setup.APIcommon import getAPIResponse
 from Setup.Doc import DocFormField
@@ -296,7 +295,7 @@ def get_modification_time(filepath) -> str:
 
 def refreshTracker(filepath, accept_time_diff : bool = False) -> str:
     MAX_RETRIES = 3
-
+    import win32com.client
 
     wb: object
 
