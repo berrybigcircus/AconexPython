@@ -22,7 +22,7 @@ def createlogger():
     logger.setLevel(logging.DEBUG)
 
     logpath = FOLDERPATH + "/Logs/debug.log"
-    mode = "a" if os.path.exists(logpath) else mode = "w"
+    mode = "a" if os.path.exists(logpath) else "w"
     file_handler = logging.FileHandler(filename=FOLDERPATH + "/Logs/debug.log", mode=mode, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(lformat)
