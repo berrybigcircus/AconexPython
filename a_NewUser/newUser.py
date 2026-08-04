@@ -14,7 +14,6 @@ from Setup.APIcommon import session, getAPIResponse, indexInput, cleanOrgName, S
 from Setup.Directory import OutlookMail, NewUserEmail, NewOrgEmail, getMailingGroups, findMailingGroup, \
     createMailingGroup
 from Setup.Mail import getProjectInviteMailID, openDraftLink
-from Setup.Outlook import connect, getEmAddress
 from Setup.Project import getProjectsList
 from Setup.config import config
 
@@ -589,6 +588,7 @@ dirCreator = { #headings for csv for project directory
 }
 
 def createProjectDirectory():
+    from Setup.Outlook import connect, getEmAddress
     #connect to open outlook application - must be open on the machine for this to work
     outlook = connect()
 
