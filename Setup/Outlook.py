@@ -1,8 +1,6 @@
 import re
 from typing import Any
 
-import win32com.client
-
 from Setup import EAsetup, UK1setup
 from Setup.Project import getProjectsList
 from Setup.config import config, init
@@ -35,6 +33,8 @@ def find_folder(folder_to_find: str, outlook) -> object:
 
 
 def connect() -> Any:
+    import win32com.client
+
     # connect to open outlook application - must be open on the machine for this to work
     try:
         outlook = win32com.client.Dispatch("Outlook.Application").GetNameSpace('MAPI')
