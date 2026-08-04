@@ -37,6 +37,8 @@ class OutlookContact:
         self.__role : str = None
         self.__aconexID : str = None
 
+        from Setup.Outlook import getEmAddress
+
         if contactitem:
             config.logger.info("Creating OutlookContact object")
             self.contactitem = contactitem

@@ -291,7 +291,7 @@ def dms_to_decimal(dms : str) -> float:
     deg, minutes, seconds = dms.split("; ")
     return float(deg) + float(minutes )/ 60 + float(seconds) / 3600
 
-def testcoordinates(room_polygons, room_heights, latstr : str, longstr : str, altitude : str):
+def check_coordinates(room_polygons, room_heights, latstr : str, longstr : str, altitude : str):
     lat = dms_to_decimal(latstr)
     long = dms_to_decimal(longstr)
     altitude = float(altitude)
@@ -308,7 +308,6 @@ def testcoordinates(room_polygons, room_heights, latstr : str, longstr : str, al
 
     print("Photo is not in any rooms")
     return False
-
 
 def loadPhotos(folderpath):
     for f in os.listdir(folderpath):

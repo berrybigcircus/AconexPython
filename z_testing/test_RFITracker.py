@@ -4,9 +4,9 @@ from unittest import TestCase
 import pytest
 
 from Setup.Doc import search_for_tracker
-from Setup.Mail import AconexThread
+from Setup.Mail import AconexThread, searchMail, getRFIMailTypes
 from Setup.config import config, refreshTracker
-from d_Mail.RFIs.RFITracker import uploadRFITracker, main, getrfithreadnew
+from d_Mail.RFIs.RFITracker import uploadRFITracker, main, getrfithreadnew, convertToRow
 from z_testing.test_config import TestConfig
 
 
@@ -48,6 +48,22 @@ class TestRFI(TestCase):
         tconfig.init_CMUH()
 
         assert main() == True
+
+    @pytest.mark.integration
+    def test_row(self):
+        luceneQuery = "matchAll:1 NOT HBVoid AND docno:HBC-RFI-000050"
+        mailtypes = config.mailtypes()
+        rfimails = searchMail(config, luceneQuery, mailtypes)
+
+        rfimailtypes, rfireplymailtypes = getRFIMailTypes(config.project(), config.mailtypes())
+
+        allRows = []
+
+        for rfimail in rfimails:
+            thisRow = convertToRow(allRows, rfimail, rfimailtypes, rfireplymailtypes)
+
+            for key, val in thisRow.items():
+                print("{}: {}".format(key, val))
 
     def test_getRFIs(self):
         tconfig = TestConfig()

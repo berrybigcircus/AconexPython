@@ -311,17 +311,3 @@ def registerTransmittal(docid: str):
     #sendDraft(draftMailURL) TODO
 
 
-def test():
-    luceneQuery = "matchAll:1 NOT HBVoid AND docno:HBC-RFI-000050"
-    mailtypes = config.mailtypes()
-    rfimails = searchMail(config, luceneQuery, mailtypes)
-
-    rfimailtypes, rfireplymailtypes = getRFIMailTypes(config.project(), config.mailtypes())
-
-    allRows = []
-
-    for rfimail in rfimails:
-        thisRow = convertToRow(allRows, rfimail, rfimailtypes, rfireplymailtypes)
-
-        for key, val in thisRow.items():
-            print("{}: {}".format(key, val))
