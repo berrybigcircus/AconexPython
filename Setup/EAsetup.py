@@ -24,11 +24,11 @@ body = {'grant_type':'client_credentials',
 
 response = requests.post(LOBBYURL, headers=headers, params=body)
 print(str(response.status_code) + " " + response.reason)
-jsonResponse = response.json()
-if jsonResponse:
-    bearer = 'Bearer ' + jsonResponse['access_token'] #Use the Access Token to make authorized requests to Aconex APIs on behalf of the authenticated user
 
-else:
+if response.status_code != 200:
     raise ConnectionError("Authentication failed")
+
+jsonResponse = response.json()
+bearer = 'Bearer ' + jsonResponse['access_token'] #Use the Access Token to make authorized requests to Aconex APIs on behalf of the authenticated user
 
 password = os.getenv("PASSWORD")

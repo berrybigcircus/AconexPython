@@ -17,6 +17,13 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      EA_CLIENT_ID: ${{ secrets.EA_CLIENT_ID }}
+      EA_CLIENT_SECRET: ${{ secrets.EA_CLIENT_SECRET }}
+      UK_CLIENT_ID: ${{ secrets.UK_CLIENT_ID }}
+      UK_CLIENT_SECRET: ${{ secrets.UK_CLIENT_SECRET }}
+      PASSWORD: ${{ secrets.PASSWORD }}
+
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python 3.14
