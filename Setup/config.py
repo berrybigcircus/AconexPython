@@ -21,7 +21,9 @@ def createlogger():
     logger: logging.Logger = logging.getLogger('aconexlogger')
     logger.setLevel(logging.DEBUG)
 
-    file_handler = logging.FileHandler(filename=FOLDERPATH + "/Logs/debug.log", mode="a", encoding="utf-8")
+    logpath = FOLDERPATH + "/Logs/debug.log"
+    mode = "a" if os.path.exists(logpath) else mode = "w"
+    file_handler = logging.FileHandler(filename=FOLDERPATH + "/Logs/debug.log", mode=mode, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(lformat)
 
