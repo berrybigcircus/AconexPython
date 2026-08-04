@@ -21,17 +21,20 @@ def createlogger():
     logger: logging.Logger = logging.getLogger('aconexlogger')
     logger.setLevel(logging.DEBUG)
 
-    logpath = FOLDERPATH + "/Logs/debug.log"
-    mode = "a" if os.path.exists(logpath) else "w"
-    file_handler = logging.FileHandler(filename=FOLDERPATH + "/Logs/debug.log", mode=mode, encoding="utf-8")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(lformat)
+    #write to file unlesss CI
+    if not os.getenv("CI"):
+        logpath = FOLDERPATH + "/Logs/debug.log"
+        mode = "a" if os.path.exists(logpath) else "w"
+        file_handler = logging.FileHandler(filename=FOLDERPATH + "/Logs/debug.log", mode=mode, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(lformat)
+        logger.addHandler(file_handler)
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(lformat)
 
-    logger.addHandler(file_handler)
+
     logger.addHandler(console_handler)
     return logger
 
