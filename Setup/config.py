@@ -2,9 +2,11 @@ import datetime
 import logging
 import os
 import pathlib
+import sys
 import time
 
-import pywintypes
+if sys.platform == "win32":
+    import pywintypes
 
 from Setup.APIcommon import getAPIResponse
 from Setup.Doc import DocFormField
