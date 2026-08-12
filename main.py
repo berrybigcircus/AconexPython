@@ -1,7 +1,7 @@
 from Setup import UK1setup, EAsetup, Mail
 from Setup.config import init, config
 from Setup.getAllProjects import getAllProjects
-from a_NewUser import newUser
+from a_NewUser import Directory
 from b_Workflow import WorkflowComments
 from c_Field import exporting, IssuesPhotos, inspectionPDF
 from d_Mail.Import import OutlookChecker

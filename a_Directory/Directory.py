@@ -442,7 +442,7 @@ def addToGroup(userData):
             config.info("User %s is already in the mailing group." % userName)
 
 def draftTransmittal(userData):
-    #get HBDC All #Docs
+    #get HBDC All z_Docs
     HBDCALLDOCS = "matchAll:1 confidential:0 AND NOT (SharedWith_singleSelect:Internal* OR SharedWith_singleSelect:Shared*)" #manual recreation of this search
     parameters = {"search_type": "PAGED", #PAGED, meaning return results by "pages" of variable size.
                   "return_fields": "docno,title,doctype,confidential,SharedWith_singleSelect",
@@ -591,8 +591,7 @@ dirCreator = { #headings for csv for project directory
 
 def createProjectDirectory():
     from Setup.Outlook import connect, getEmAddress
-    #connect to open outlook application - must be open on the machine for this to work
-    outlook = connect()
+    outlook = connect() #connect to open outlook application - must be open on the machine for this to work
 
     contactsfolder = outlook.GetDefaultFolder(10)
     mycontacts = contactsfolder.Items
@@ -604,7 +603,7 @@ def createProjectDirectory():
     root = ET.fromstring(xml)
     groups = root.findall("SearchResults/Directory[SearchResultType='GROUP_TYPE']")
 
-    filterOutRegex = "All|HB.*|(Henry Brothers).*|Client.*|(Int Design Team)"
+    filterOutRegex = "All|HB.*|(Henry Brothers).*|Client.*|(Int Design Team)" #These mailing group names will not be included
     for group in groups:
         groupname = group.find("GroupName").text
         groupid = group.find("GroupId").text
@@ -645,7 +644,7 @@ def createProjectDirectory():
                 contact = outlooklookup(mycontacts, fullname,lastname,groupname, aconexid)
 
                 if not contact.already_exists():
-                    #add to outlook contactsc
+                    #add to outlook contacts
                     contact.setfullname(fullname)
                     contact.setrole(userXml.find("JobTitle").text)
                     contact.setaconexid(userXml.find("UserId").text)
@@ -712,11 +711,11 @@ def outlooklookup(mycontacts, fullname : str, lastname : str, company : str, aco
 
     lastname = lastname.replace("'","_") #wildcard any apostrophes
 
-    #different filters to perform to try to match to outlook contacts
+    #Different DASL queries to perform to try to match to outlook contacts
     sfilters = ["@SQL=""urn:schemas:contacts:governmentid"" = \'{aid}\'".format(aid = aconexid),
                 "[FullName] = {f}".format(f=fullname),
                 "@SQL=""urn:schemas:contacts:o"" = \'{c}\' AND ""urn:schemas:contacts:fileas"" LIKE \'%{l}\'".format(c=company,
-                                                                                                       l=lastname) #TODO we need to check this one as it may return wrong results
+                                                                                                       l=lastname)
                 ]
     return filtercontacts(mycontacts, sfilters, aconexid)
 
@@ -765,7 +764,7 @@ def createExcel(fname : str, dirCreator : dict):
 
 def main():
     global FOLDERPATH
-    FOLDERPATH = "{}\\a_NewUser".format(config.project().folderroot)
+    FOLDERPATH = "{}\\a_Directory".format(config.project().folderroot)
 
     ##Get the users to search for using the input text file
     EMAILREGEX = r"\S+@\S+\.\S+"
@@ -773,7 +772,7 @@ def main():
 
 
 
-    file = open(FOLDERPATH + "\\userList.txt", "r")
+    file = open(FOLDERPATH + "\\user_list.txt", "r")
     textLines = [line.rstrip() for line in file]
     textLines = textLines[1::] #remove top info line
     file.close()

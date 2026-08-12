@@ -3,8 +3,8 @@ from unittest import TestCase
 import pytest
 
 from Setup.config import config
-from a_NewUser import newUser
-from a_NewUser.newUser import cleanmobile, createProjectDirectory
+from a_Directory import Directory
+from a_Directory.Directory import cleanmobile, createProjectDirectory
 from z_testing.test_config import TestConfig
 
 
@@ -15,14 +15,14 @@ class TestNewUser(TestCase):
 
         assert config.getNUTrackerLocation() is not None
         testData = {'User': ['Max Rebo <maxrebo@cantana.com>'], 'Company': ['Max Rebo Band'], 'Project': ['UTC - LRI UTC'], 'Done?': ['No'], 'Action with': ['Org admin'], 'Comments': ['New user'], 'Date Started': ['30/06/2026'], 'Date Completed': ['']}
-        newUser.updateTracker(config, testData)
+        Directory.updateTracker(config, testData)
 
     @pytest.mark.integration
     def test_newUser_for_chosen_project(self):
         tconfig = TestConfig()
         tconfig.init_UTC()
 
-        newUser.main()
+        Directory.main()
 
 
 class TestProjectDirectory(TestCase):

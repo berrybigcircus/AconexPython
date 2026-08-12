@@ -186,10 +186,12 @@ def project_list_extract(projectslist: dict[str, list], search_for: str) -> list
 
 EMAIL1ID = "http://schemas.microsoft.com/mapi/id/{00062004-0000-0000-C000-000000000046}/80850102"
 
+#Convert exchange contacts 
 def getEmAddress(contact) -> str:
     if contact.Email1AddressType == "SMTP":
         return contact.Email1Address
 
+    #Exchange email addresses
     elif contact.Email1AddressType == "EX":
         outlook = connect()
         propertyaccessor = contact.PropertyAccessor
