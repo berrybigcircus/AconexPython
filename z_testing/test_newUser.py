@@ -3,8 +3,8 @@ from unittest import TestCase
 import pytest
 
 from Setup.config import config
-from a_NewUser import newUser
-from a_NewUser.newUser import cleanmobile, createProjectDirectory
+from a_NewUser import Directory
+from a_NewUser.Directory import cleanmobile, createProjectDirectory
 from z_testing.test_config import TestConfig
 
 
