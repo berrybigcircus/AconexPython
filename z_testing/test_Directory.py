@@ -3,7 +3,7 @@ from unittest import TestCase
 import pytest
 
 from Setup.config import config
-from a_Directory import Directory
+from a_Directory import Directory, Directory_UI
 from a_Directory.Directory import cleanmobile, createProjectDirectory
 from z_testing.test_config import TestConfig
 
@@ -23,6 +23,11 @@ class TestNewUser(TestCase):
         tconfig.init_UTC()
 
         Directory.main()
+
+class TestUI(TestCase):
+    def test_open(self):
+        Directory_UI.main()
+
 
 
 class TestProjectDirectory(TestCase):
