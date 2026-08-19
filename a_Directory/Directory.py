@@ -767,7 +767,6 @@ def main():
     FOLDERPATH = "{}\\a_Directory".format(config.project().folderroot)
 
     ##Get the users to search for using the input text file
-    EMAILREGEX = r"\S+@\S+\.\S+"
     USERLINEREGEX = r"(.*)<(\S+@\S+\.\S+)>" #I want: Name <email>
 
 
