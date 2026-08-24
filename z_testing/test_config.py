@@ -35,6 +35,10 @@ class TestConfig(TestCase):
     def init_CMUH(self):
         init(UK1setup.bearer, UK1setup.env, debug=["MMUH UTC", "268459077", "020261"])
 
+    def init_FS1018(self):
+        init(UK1setup.bearer, UK1setup.env, debug=["DfE Wisbech", "268454433", "FS1018"])
+
+
     def create(self) -> Config:
         self.init_ea()
         assert Config()

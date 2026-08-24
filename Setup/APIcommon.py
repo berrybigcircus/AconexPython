@@ -2,6 +2,7 @@ import json
 import datetime
 import pathlib
 import pickle
+import warnings
 from base64 import b64encode
 from urllib.parse import urlencode
 from xml.etree import ElementTree as ET
@@ -34,6 +35,14 @@ def getAPIResponse(url, headers, explanation) -> str:
     #validate get request
     if response.status_code != 200:
         print("There was an error %s. %d %s" % (explanation, response.status_code, response.reason))
+        if response.text:
+            errorxml = ET.fromstring(response.text)
+            if errorxml:
+                try:
+                    print("{code}: {desc}".format(code=errorxml.find("ErrorCode").text, desc=errorxml.find("ErrorDescription").text))
+                except:
+                    pass
+
         return None
     return response.text
 
@@ -120,6 +129,23 @@ def indexInput(maxVal, allowedVals : list[str] = None) -> int | str | None:
             continue
 
         return chosenIndex
+
+#Take ET.Element, and return the text string for specified tag. Handle all errors
+def et_findtagtext(element : ET.Element, tagname : str) -> str:
+    if not element:
+        raise ValueError("Element not found.")
+
+    tag = element.find(tagname)
+    if not tag:
+        raise AttributeError("%s tag not found within element." % tagname)
+
+    if tag.text:
+        return tag.text
+    else:
+        warnings.warn("Text for tag %s is empty." % tagname)
+        return ""
+
+
 
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection
     uniqueID: str = checklistJson["id"]

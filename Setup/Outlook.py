@@ -10,7 +10,7 @@ from d_Mail.RFIs import RFITracker
 from f_AutoMail.EW import EWExcel
 
 
-class OutlookConfig:
+class WrapperConfig:
     def __init__(self, debug = False):
         self.bearer = EAsetup.bearer if debug else UK1setup.bearer
         self.env = EAsetup.env if debug else UK1setup.env
@@ -151,7 +151,7 @@ def autorunRFITracker(debug : bool, projectname : str) -> bool:
 
 def initProject(search_term : str, search_for : str = "projectnames", debug : bool = False):
     projectslist: dict[str, list] = getProjectsList()
-    outlookconfig = OutlookConfig(debug)
+    outlookconfig = WrapperConfig(debug)
     projectvals: list[str] = project_list_extract(projectslist, search_for)
 
     count = 0

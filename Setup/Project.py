@@ -142,7 +142,7 @@ class Project():
         return "{}\\d_Mail\\Import\\{}Mail_Template.xlsx".format(self.folderroot, self.projectCodePrefix())
 
     def getProjectDirectoryLocation(self) -> str:
-        return "{}\\a_NewUser\\PDirectories\\{}Project Directory.xlsx".format(self.folderroot, self.projectCodePrefix())
+        return "{}\\a_Directory\\PDirectories\\{}Project Directory.xlsx".format(self.folderroot, self.projectCodePrefix())
 
     def getRFIPickleLocation(self) -> str:
         return "{}\\d_Mail\\RFIs\\Pickle\\{}mails.pkl".format(self.folderroot, self.projectCodePrefix())

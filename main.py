@@ -1,7 +1,7 @@
 from Setup import UK1setup, EAsetup, Mail
 from Setup.config import init, config
 from Setup.getAllProjects import getAllProjects
-from a_NewUser import Directory
+from a_Directory import Directory
 from b_Workflow import WorkflowComments
 from c_Field import exporting, IssuesPhotos, inspectionPDF
 from d_Mail.Import import OutlookChecker
@@ -16,19 +16,17 @@ def getProjects():
     init(UK1setup.bearer, UK1setup.env, debug=None)  # No project
     getAllProjects.main()
 
-def newUserMain(createdirectory : bool = False):
+def directoryMain(createdirectory : bool = False):
 
     if createdirectory:
-        newUser.createProjectDirectory()
+        Directory.createProjectDirectory()
     else:
-        newUser.main()
+        Directory.main()
 
 
 def WFCommsMain():
     WorkflowComments.main(inputUseTextFile="n", forceAll=True)
     #WorkflowComments.main(inputUseTextFile=input("Generate from docsList.txt? (Y/N): ").lower())
-
-    #TODO - make WF tracker upload itself to doc register
 
 def fieldMain():
     #Export data (WIP)
@@ -81,7 +79,7 @@ def main():
     init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project
 
     #RUN PACKAGES
-    newUserMain(createdirectory=False)
+    directoryMain(createdirectory=False)
     #WFCommsMain()
     #fieldMain()
     # docMain()

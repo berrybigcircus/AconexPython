@@ -108,10 +108,6 @@ def addUserIds(root, elemname : str, userids : set[str]):
         elem.text = uid
         root.append(elem)
 
-def addDocIds(root, docids : list[str]):
-    pass
-
-
 def getMailingGroups(config):
     session.cache.clear()
     url = config.env() + "/api/mailinggroups/" + config.project().projectID() #they structured the url different for no reason
@@ -135,6 +131,7 @@ def findMailingGroup(jsonMG, regSearch) -> (str, [str]):
             mgID = group["groupId"]
             mgUsers = [user["userId"] for user in group["users"]] if group["users"] != None else [] #extract just the id
             break
+
 
     return mgID, mgUsers
 
