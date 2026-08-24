@@ -1,10 +1,19 @@
+import datetime
 import re
 from logging import Logger, Handler, Formatter, INFO
 
+from Setup.APIcommon import et_findtagtext
 from Setup.Project import getProjectsList
-from Setup.config import createlogger #temp use of logger
+from Setup.config import createlogger, config  # temp use of logger
+from Setup.Outlook import WrapperConfig
 import customtkinter as ctk
 from PIL import Image
+from a_Directory.Directory import search_on_email, project_directory_search, search_on_name, global_directory_search, \
+    api_project_directory_search, loadcsv
+
+import xml.etree.ElementTree as ET
+
+DEBUG : bool = False
 
 class App(ctk.CTk):
     def __init__(self):
@@ -17,7 +26,12 @@ class App(ctk.CTk):
 
         self.INPUT_COLOURSMAP = {"default" : '#DCE4EE',
                               "duplicate" : ['SteelBlue2', 'gold', 'sienna1', 'OliveDrab1', 'MediumPurple1', 'dark khaki'],
-                              "disabled" : 'DimGrey'}
+                              "disabled" : 'DimGrey',
+                                'IDLE' : '#343638',
+                                "INVALID": 'grey28',
+                                 'GREEN': 'DarkGreen',
+                                 'RED': 'DarkRed',
+                                 'PURPLE': 'DarkOrchid4'}
 
         self.frame_topbuttons = TopButtonsFrame(self)
         self.frame_topbuttons.grid(row=0, column=0, padx=10, pady=10, sticky="new")
@@ -31,8 +45,10 @@ class App(ctk.CTk):
         self.frame_tablerows.grid_rowconfigure(2, weight=1)
 
         self.rows: set[RowFrame] = set()
-        projects_dict: dict[str, list] = getProjectsList()
-        self.project_values: list[str] = self.get_project_values(projects_dict)
+        self.projects_dict: dict[str, tuple[str, str]] = self.get_project_values(getProjectsList()) #in format name: (pid, code)
+        self.project_values: list[str] = list(self.projects_dict.keys())[::-1]
+
+        self.csvOrgAdmins : dict[str, tuple[str, str, datetime.datetime]]
 
         self.duplicaterows : dict = {
             "Company Name" : {},
@@ -63,10 +79,17 @@ class App(ctk.CTk):
         for i in range(0, INIT_ROWS):
             self.add_row()
 
-
-    def get_project_values(self, projects_dict) -> list[str]:
+    def get_project_values(self, projects_dict) -> dict[str, tuple[str, str]]:
         # get just the project names
-        return [name for name, code in projects_dict.values()][::-1]
+        return {
+            name : (pid, code) for pid, (name, code) in projects_dict.items()
+        }
+
+    def get_orgadmincsv(self) -> dict[str, tuple[str, str, datetime.datetime]]:
+        if not self.csvOrgAdmins:
+            self.csvOrgAdmins = loadcsv()
+
+        return self.csvOrgAdmins
 
     #Add a new row when + is clicked
     def add_row(self):
@@ -89,22 +112,22 @@ class App(ctk.CTk):
         COLUMN_MAP = {
             "Full Name": {
                 "text": lambda r: r.entry_usertext.get().strip().lower(),
-                "default_text": lambda r: r.default_usertext,
+                "default_text": lambda r: r.default_usertext(),
                 "handle_duplicate": lambda r, b: r.duplicate_user(b)
             },
             "Email Address": {
                 "text": lambda r: r.entry_emailtext.get().strip().lower(),
-                "default_text": lambda r: r.default_emailtext,
+                "default_text": lambda r: r.default_emailtext(),
                 "handle_duplicate": lambda r, b: r.duplicate_user(b)
             },
             "Company Name": {
                 "text": lambda r: r.entry_companytext.get().strip().lower(),
-                "default_text": lambda r: r.default_companytext,
+                "default_text": lambda r: r.default_companytext(),
                 "handle_duplicate": lambda r, b: r.duplicate_company(b)
             },
             "Project": {
                 "text": lambda r: r.combo_project.get().strip(),
-                "default_text" : lambda r: "Project",
+                "default_text": lambda r: "Project",
                 "handle_duplicate": lambda r, b: r.duplicate_project(b)
             }
         }
@@ -114,7 +137,6 @@ class App(ctk.CTk):
         default_text = COLUMN_MAP[duplicate_type]["default_text"]
 
         col_default_text = default_text(current_row).lower()
-        self.logger.debug(f"col_default_text='{col_default_text}'")
 
         duplicate_sets: dict[RowFrame, set[RowFrame]] = {}
 
@@ -127,7 +149,6 @@ class App(ctk.CTk):
 
             handle_duplicate(row, colour)
 
-            self.logger.debug(f"row_text='{row_text}'")
             if not row_text or row_text == col_default_text:
                 continue
 
@@ -160,9 +181,6 @@ class App(ctk.CTk):
         self.rows = set()
         self.init_rows()
 
-    def clear_logger(self):
-        self.frame_searchclearrow.reset_logger()
-
 
 class SearchClearFrame(ctk.CTkFrame):
     def __init__(self, master=None, app=None):
@@ -172,7 +190,7 @@ class SearchClearFrame(ctk.CTkFrame):
         self.button_clear.grid(row=0, column=0, padx=10, pady=10, sticky="ws")
         self.button_clear.bind("<Button-1>", self.clear_pressed)
 
-        self.tb_log = ctk.CTkTextbox(self, height=80)
+        self.tb_log = ctk.CTkTextbox(self, height=80, state="disabled")
         self.tb_log.grid(row=0, column=1, sticky="ew")
         self.grid_columnconfigure(1, weight=1)
         log_handler = LogTBHandler(self.tb_log)
@@ -183,6 +201,7 @@ class SearchClearFrame(ctk.CTkFrame):
 
         self.button_search = ctk.CTkButton(self, text="Search", command=None)
         self.button_search.grid(row=0, column=2, padx=10, pady=10, sticky="es")
+        self.button_search.bind("<Button-1>", self.search_pressed)
 
     def clear_pressed(self, event):
         #Remove all rows and replace with default ones
@@ -193,7 +212,93 @@ class SearchClearFrame(ctk.CTkFrame):
 
     #TODO
     def search_pressed(self, event):
-        pass
+        self.app.logger.info("Search pressed")
+        for row in self.app.rows:
+            #if search is pressed, check the valid rows not yet selected
+            if row.check_if_valid() and not row.is_selected():
+                self.app.logger.info("Row %d %s" % (row.id, row.current_status()))
+                match row.current_status():
+                    case "IDLE":
+                        # Get the project and init config based on the project
+                        selected_project = row.combo_project.get()
+                        projectid, projectcode = self.app.projects_dict[selected_project]
+                        ui_config : WrapperConfig = WrapperConfig(DEBUG)
+                        ui_config.initWrapper(debug=[selected_project, projectid, projectcode])
+
+                        self.app.logger.info("Initialised project %s %s" % (config.project().projectCode(), config.project().projectName()))
+
+                        # Search the project directory on email
+                        username = row.entry_usertext.get().strip().lower()
+                        email = row.entry_emailtext.get().strip().lower()
+                        parameters = search_on_email(email)
+
+                        num_users, usersXML = api_project_directory_search(parameters) # Search for this user on the project
+
+                        # If user found on project:
+
+                        if num_users > 1:
+                            #Multiple users found on the project, allow user to choose
+                            #config.logger.debug(rootXML)
+                            #Convert user entry to combo box
+                            row.user_selection(usersXML)
+
+                        elif num_users == 1:
+                            config.info("User has been found on %s" % selected_project)
+                            row.update_status("GREEN") # turn fg green
+                            # add company name in as in directory
+                            aconex_company = et_findtagtext(usersXML, "OrganizationName")
+                            row.widget_company.set(aconex_company)
+                            # TODO update new user tracker
+                            row.cb_select.configure(state="normal") # enable tickbox
+                        # If user not found
+                        else:
+                            pass
+                            # search name in global, include company if provided
+                            config.info(
+                                "User has NOT been found on %s. Searching global directory..." % selected_project)
+                            parameters = search_on_name(username, project=False)
+                            csvOrgAdminList = None #TODO
+                            searchstatus, omail = global_directory_search(csvOrgAdminList, parameters)
+
+
+                            # if found once
+                                # fill in name and company
+                                # turn green, open link
+                            # if found >1
+                                # show company selector
+                                # turn purple if company selected
+                                # turn red if N/A company
+                                # if not found
+                                    # if company provided
+                                    # search for company
+                                    # show company selector for companies with org admins
+                                    # hover over for org admins?
+                                    # turn purple if company selected
+                                    # turn red if N/A company
+                                # if no company
+                                    # turn fg red
+                                    # company = 'N/A (Register as new)'
+
+                    case "GREEN":
+                        pass  # TODO
+                    case "PURPLE":
+                        pass  # TODO
+                    case "RED":
+                        pass #TODO
+                    case _:
+                        raise Exception("Invalid row status '%s'" % row.current_status())
+
+                #press search again
+                    #if green
+                        #search project again
+                    #if purple
+                        #send 'new user' email to org admins
+                    #if red
+                        #send 'new org' email to org admins
+                    #update tracker
+
+
+
 
 class LogTBHandler(Handler):
     def __init__(self, tb_output : ctk.CTkTextbox):
@@ -202,8 +307,10 @@ class LogTBHandler(Handler):
 
     def emit(self, log_record):
         message = self.format(log_record)
+        self.tb_output.configure(state="normal")
         self.tb_output.insert("end", message + "\n")
         self.tb_output.see("end") #scroll to end of message
+        self.tb_output.configure(state="disabled")
 
 
 
@@ -227,7 +334,7 @@ class TopButtonsFrame(ctk.CTkFrame):
         self.button_invite = ctk.CTkButton(self, text="Draft project invite", command=None)
         self.button_invite.grid(row=0, column=3, padx=10, pady=10, sticky="ew")
 
-USERLINEREGEX = r"(.*)<(\S+@\S+\.\S+)>"
+USERLINEREGEX = r"([a-zA-Z ]*)[^a-zA-Z0-9]+(\S+@[^>\s]+)"
 
 class RowFrame(ctk.CTkFrame):
     __nextID = 1
@@ -237,43 +344,67 @@ class RowFrame(ctk.CTkFrame):
         self.id = RowFrame.__nextID
         RowFrame.__nextID += 1
 
+        self.is_valid : bool = False #this is whether this row can be searched
+        self.status : str = "IDLE"
+
         for col in range(5):
             self.grid_columnconfigure(col, weight=0)
 
-        self.default_usertext : str = "Full Name"
-        self.default_emailtext : str = "Email Address"
-        self.default_companytext : str = "Company Name"
+        default_usertext : str = "Full Name"
+        default_emailtext : str = "Email Address"
+        default_companytext : str = "Company Name"
 
         self.user_is_duplicate : bool = False #check if two rows are the same person to prevent running twice
 
-        self.entry_usertext = ctk.StringVar(self, self.default_usertext)
-        self.entry_user = ctk.CTkEntry(self, width=120, placeholder_text=self.entry_usertext.get(), textvariable=self.entry_usertext)
-        self.entry_user.grid(row=0, column=0, sticky="n")
-        self.entry_user.bind("<FocusOut>", lambda event: self.on_deselect(self.default_usertext))
-        self.entry_user.bind('<Control-v>', lambda event : self.paste_user(self.entry_user))
+        #User widget starts as entry but could be a combo box
+        self.entry_usertext = ctk.StringVar(self, default_usertext)
+        self.widget_user = ctk.CTkEntry(self, width=120, placeholder_text=self.entry_usertext.get(), textvariable=self.entry_usertext)
+        self.widget_user.grid(row=0, column=0, sticky="n")
+        self.widget_user.bind("<FocusOut>", lambda event: self.on_deselect(default_usertext))
+        self.widget_user.bind('<Control-v>', lambda event : self.paste_user(self.widget_user))
 
-        self.entry_emailtext = ctk.StringVar(self, self.default_emailtext)
+        self.entry_emailtext = ctk.StringVar(self, default_emailtext)
         self.entry_email = ctk.CTkEntry(self, width=240, placeholder_text=self.entry_emailtext.get(), textvariable=self.entry_emailtext)
         self.entry_email.grid(row=0, column=1, sticky="n")
-        self.entry_email.bind("<FocusOut>", lambda event: self.on_deselect(self.default_emailtext))
+        self.entry_email.bind("<FocusOut>", lambda event: self.on_deselect(default_emailtext))
         self.entry_email.bind('<Control-v>', lambda event : self.paste_user(self.entry_email))
 
         self.combo_project = ctk.CTkComboBox(self, width=160, values=project_vals, command=lambda event: self.on_deselect("Project"))
         self.combo_project.grid(row=0, column=2, sticky="n")
         self.app.check_for_duplicates("Project", self) #run once to make all project selectors same colour
 
-        self.entry_companytext = ctk.StringVar(self, self.default_companytext)
-        self.entry_company = ctk.CTkEntry(self, width=160, placeholder_text=self.entry_companytext.get(), textvariable=self.entry_companytext)
-        self.entry_company.grid(row=0, column=3, sticky="n")
-        self.entry_company.bind("<FocusOut>", lambda event: self.on_deselect(self.default_companytext))
+        # Company widget starts as entry but could be a combo box
+        self.entry_companytext = ctk.StringVar(self, default_companytext)
+        self.widget_company = ctk.CTkEntry(self, width=160, placeholder_text=self.entry_companytext.get(), textvariable=self.entry_companytext)
+        self.widget_company.grid(row=0, column=3, sticky="n")
+        self.widget_company.bind("<FocusOut>", lambda event: self.on_deselect(default_companytext))
 
-        check_var = ctk.StringVar(value="on")
-        self.cb_select = ctk.CTkCheckBox(self, text="", variable=check_var, width=10, command=None)
+        self.default_map: dict[ctk.CTkEntry, str] = {
+            self.widget_user: default_usertext,
+            self.entry_email: default_emailtext,
+            self.widget_company: default_companytext
+        }
+
+        self.input_columns = [self.widget_user, self.entry_email, self.combo_project, self.widget_company]
+
+        check_var = ctk.StringVar(value="off")
+        self.cb_select = ctk.CTkCheckBox(self, text="", variable=check_var, width=10, command=None, onvalue="on", offvalue="off")
         self.cb_select.configure(state="disabled")
         self.cb_select.grid(row=0, column=4, padx=(10,0), sticky="ne")
 
+        self.app.logger.info(self.is_selected())
+
     def on_deselect(self, duplicate_type : str):
         self.app.check_for_duplicates(duplicate_type, self)
+
+    def default_usertext(self) -> str:
+        return self.default_map[self.widget_user]
+
+    def default_emailtext(self) -> str:
+        return self.default_map[self.entry_email]
+
+    def default_companytext(self) -> str:
+        return self.default_map[self.widget_company]
 
     # if paste pressed, split the name/email and put into the selected row
     def paste_user(self, entry : ctk.CTkEntry):
@@ -293,10 +424,10 @@ class RowFrame(ctk.CTkFrame):
 
     def duplicate_company(self, colour: str = ""):
         if colour:
-            self.entry_company.configure(text_color=colour)
+            self.widget_company.configure(text_color=colour)
 
         else:
-            self.entry_company.configure(text_color=self.app.INPUT_COLOURSMAP["default"])
+            self.widget_company.configure(text_color=self.app.INPUT_COLOURSMAP["default"])
 
     def duplicate_project(self, colour: str = ""):
         if colour:
@@ -312,6 +443,72 @@ class RowFrame(ctk.CTkFrame):
 
         else:
             self.user_is_duplicate = False
+
+    #check if input value is still its default
+    def check_is_default(self, entry : ctk.CTkEntry) -> bool:
+        return entry.get() == self.default_map[entry]
+
+    def check_if_valid(self) -> bool:
+        #We need the name and email address, if theres no company, we can search for this later. we need email for the tracker/emailing, and the name for searching directory
+        if self.user_is_duplicate or any(map(self.check_is_default, [self.widget_user, self.entry_email])):
+            self.app.logger.info("Row %d is not valid" % self.id)
+            self.is_valid = False
+        else:
+            self.app.logger.info("Row %d is valid" % self.id)
+            self.is_valid = True
+            self.status = "IDLE"
+
+        self.change_row_colour()
+        return self.is_valid
+
+    #if tickbox is selected - this is only if row is valid and user is found on project
+    def is_selected(self) -> bool:
+        return self.cb_select.get() == "1"
+
+    """
+    The Rows status can be one of:
+        INVALID = row isnt valid yet and cant be searched
+        IDLE = row hasnt been searched yet within directory
+        GREEN = user has been searched and found within global OR project directory
+        PURPLE = user has NOT been found but has been matched to a valid aconex org
+        RED = user has NOT been found, valid aconex org has NOT been found
+    """
+    def current_status(self) -> str:
+        if not self.is_valid:
+            return "INVALID"
+        else:
+            return self.status
+
+    def update_status(self, status : str):
+        self.status = status
+        self.change_row_colour()
+
+    def change_row_colour(self):
+        self.set_fg(self.app.INPUT_COLOURSMAP[self.status])
+
+    #set background colour for all columns in row
+    def set_fg(self, colour: str):
+        for cwidget in self.input_columns:
+            cwidget.configure(fg_color=colour)
+
+    #Convert user entry to combo box where users XML is the API directory info
+    def user_selection(self, users : list[ET.Element]):
+        uservals : list[str] = [] #list of values for combo box
+        username : str
+        for userXML in users:
+            #print(userXML.text)
+            username = et_findtagtext(userXML, "UserName")
+
+            #if user is a guest
+            if et_findtagtext(userXML, "SearchResultType") == "GUEST_TYPE":
+                username += " (Guest)"
+
+            uservals.append(username)
+
+        self.widget_user.destroy() #destroy entry
+        self.widget_user = ctk.CTkComboBox(self, width=120, values=uservals)
+        self.widget_user.grid(row=0, column=0, sticky="n")
+        self.app.logger.debug("Converted entry to combobox with values %s" % uservals)
 
 def main():
     app = App()
