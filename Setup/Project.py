@@ -74,7 +74,7 @@ class Project():
         elif self.__projectCode == "51023":
             return "CMCC_51023-HBC-MCC-XX-L-W-9904"
         elif self.__projectCode == "020261":
-            return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7904"
+            return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7905"
         else:
             return "{}-HBC-XX-XX-L-X-9904".format(self.__projectCode)
 
@@ -142,7 +142,7 @@ class Project():
         return "{}\\d_Mail\\Import\\{}Mail_Template.xlsx".format(self.folderroot, self.projectCodePrefix())
 
     def getProjectDirectoryLocation(self) -> str:
-        return "{}\\a_NewUser\\PDirectories\\{}Project Directory.xlsx".format(self.folderroot, self.projectCodePrefix())
+        return "{}\\a_Directory\\PDirectories\\{}Project Directory.xlsx".format(self.folderroot, self.projectCodePrefix())
 
     def getRFIPickleLocation(self) -> str:
         return "{}\\d_Mail\\RFIs\\Pickle\\{}mails.pkl".format(self.folderroot, self.projectCodePrefix())

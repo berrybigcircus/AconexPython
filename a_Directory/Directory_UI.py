@@ -1,19 +1,23 @@
 import datetime
+import json
 import re
+from rapidfuzz import fuzz
 from logging import Logger, Handler, Formatter, INFO
 
-from Setup.APIcommon import et_findtagtext
+from Setup.APIcommon import et_findtagtext, cleanOrgName
 from Setup.Project import getProjectsList
 from Setup.config import createlogger, config  # temp use of logger
 from Setup.Outlook import WrapperConfig
 import customtkinter as ctk
 from PIL import Image
-from a_Directory.Directory import search_on_email, project_directory_search, search_on_name, global_directory_search, \
-    api_project_directory_search, loadcsv
+from a_Directory.Directory import search_on_email, search_on_name, \
+    api_project_directory_search, loadcsv, api_global_directory_search, open_directory_link, search_on_company, \
+    parseOrgAdmins, find_org_admins, parse_org_admins
 
 import xml.etree.ElementTree as ET
 
 DEBUG : bool = False
+DAYSLIMIT : int = 90
 
 class App(ctk.CTk):
     def __init__(self):
@@ -178,6 +182,7 @@ class App(ctk.CTk):
         for row in self.rows:
             row.destroy()
 
+        RowFrame.resetID()
         self.rows = set()
         self.init_rows()
 
@@ -230,40 +235,100 @@ class SearchClearFrame(ctk.CTkFrame):
                         # Search the project directory on email
                         username = row.entry_usertext.get().strip().lower()
                         email = row.entry_emailtext.get().strip().lower()
-                        parameters = search_on_email(email)
+                        parameters = search_on_email(email) #TODO there is an issue if their email address is different, it might be worth checking the name as well
 
                         num_users, usersXML = api_project_directory_search(parameters) # Search for this user on the project
 
                         # If user found on project:
-
+                        #TODO re-account for user being HB and adding to HB Confidential
                         if num_users > 1:
+                            config.info("User has been found on %s %d times" % (selected_project, num_users))
                             #Multiple users found on the project, allow user to choose
-                            #config.logger.debug(rootXML)
-                            #Convert user entry to combo box
-                            row.user_selection(usersXML)
-
-                        elif num_users == 1:
+                            row.user_selection(usersXML) #Convert user entry to combo box, await input before proceeding
+                            #TODO if user edits any row, reset
+                            # TODO update new user tracker with note about multiple accounts
+                        elif num_users == 1 & len(usersXML) == 1:
                             config.info("User has been found on %s" % selected_project)
-                            row.update_status("GREEN") # turn fg green
+                            row.update_status("GREEN")
+                            row.enable_tickbox()
+                            userxml = usersXML[0]
                             # add company name in as in directory
-                            aconex_company = et_findtagtext(usersXML, "OrganizationName")
+                            aconex_company = et_findtagtext(userxml, "OrganizationName")
+                            username = et_findtagtext(userxml, "UserName")
+                            #if user is a guest
+                            if et_findtagtext(userxml, "SearchResultType") == "GUEST_TYPE":
+                                username += " (Guest)"
                             row.widget_company.set(aconex_company)
+                            row.widget_user.set(username)
+                            row.user_id = et_findtagtext(userxml, "UserId")
                             # TODO update new user tracker
-                            row.cb_select.configure(state="normal") # enable tickbox
                         # If user not found
                         else:
-                            pass
                             # search name in global, include company if provided
-                            config.info(
-                                "User has NOT been found on %s. Searching global directory..." % selected_project)
-                            parameters = search_on_name(username, project=False)
-                            csvOrgAdminList = None #TODO
-                            searchstatus, omail = global_directory_search(csvOrgAdminList, parameters)
+                            config.info("User has NOT been found on %s." % selected_project)
 
+                            parameters = search_on_name(username, project_search=False)
+                            num_users, usersXML = api_global_directory_search(parameters)
+                            # if found
+                            if num_users >= 1:
+                                # if company was entered, verify it matches the found user
+                                if row.widget_company.get() != row.default_companytext():
+                                    input_companyname = cleanOrgName(row.widget_company.get())
+                                    for uXML in usersXML:
+                                        aconex_company = cleanOrgName(et_findtagtext(uXML, "OrganizationName"))
+                                        if not fuzz.partial_ratio(input_companyname, aconex_company) > 90:
+                                            config.info("User inputted organisation %s, but directory search returned %s" % (input_companyname, aconex_company))
+                                            num_users -= 1
+                                        else:
+                                            config.logger.debug("Matched %s with directory search term %s" % (input_companyname, aconex_company))
+                                            row.widget_company.set(aconex_company)
+                                            open_directory_link(config.project().projectID(), aconex_company, username)
+                                            config.info("Opening link, please add them to the required project...")
+                                            row.update_status("GREEN")
+                                else:
+                                   if num_users == 1 and len(usersXML) == 1:
+                                       # add company name in as in directory
+                                       aconex_tradingname = et_findtagtext(usersXML[0], "TradingName")
+                                       aconex_company = et_findtagtext(usersXML[0], "OrganizationName")
+                                       row.widget_company.set(aconex_company)
+                                       open_directory_link(config.project().projectID(), aconex_tradingname, username)
+                                       config.info("Opening link, please add them to the required project...")
+                                       row.update_status("GREEN")
 
-                            # if found once
-                                # fill in name and company
-                                # turn green, open link
+                                   else:
+                                       config.info("User has been found in global %d times" % num_users)
+                                       row.company_selection(
+                                           usersXML)  # Convert user entry to combo box, await input before proceeding
+
+                            if num_users == 0:
+                                # search the org name in project directory to find the orgs to match with
+                                if row.widget_company.get() != row.default_companytext():
+                                    parameters = search_on_company(row.widget_company.get(), project_search=True)
+                                    num_users, usersXML = api_project_directory_search(
+                                        parameters)  # Search for this company on the project
+                                    matched_orgs: set[str] = set()
+                                    if num_users >= 1:
+                                        matched_orgs = set(
+                                            [et_findtagtext(uXML, "OrganizationId") for uXML in usersXML])
+
+                                orgadmins : list[str] = []
+                                for org_id in matched_orgs:
+                                    #look up this org id in csv to find org admins
+                                    orgname, orgadmins, datechecked = self.app.csvOrgAdmins.get(org_id) or (_, None, None)
+                                    while orgadmins is None or datechecked < (datetime.datetime.today() - datetime.timedelta(days=DAYSLIMIT)):
+                                        jsonRes = find_org_admins(org_id)
+                                        if jsonRes is not None:
+                                            new_admins = parse_org_admins(json.loads(jsonRes))
+                                            if new_admins is not None:
+                                                orgadmins += new_admins
+                                                datechecked = datetime.datetime.now()
+                                                self.app.csvOrgAdmins[org_id] = (orgname, new_admins, datechecked)
+
+                                #todo it doesnt quite work because we need a company selector so need to keep the org admins separate
+                                if len(orgadmins) == 0:
+                                    pass
+                                    #look up the company within the row in global
+
                             # if found >1
                                 # show company selector
                                 # turn purple if company selected
@@ -280,7 +345,7 @@ class SearchClearFrame(ctk.CTkFrame):
                                     # company = 'N/A (Register as new)'
 
                     case "GREEN":
-                        pass  # TODO
+                        pass  # TODO we need to store the IDs for these valid ones beforehand
                     case "PURPLE":
                         pass  # TODO
                     case "RED":
@@ -347,55 +412,72 @@ class RowFrame(ctk.CTkFrame):
         self.is_valid : bool = False #this is whether this row can be searched
         self.status : str = "IDLE"
 
+        self.user_id : str = None #This is the API user ID of the row's user, once found
+
         for col in range(5):
             self.grid_columnconfigure(col, weight=0)
 
-        default_usertext : str = "Full Name"
+        self.placeholder_usertext : str = "Full Name"
         default_emailtext : str = "Email Address"
-        default_companytext : str = "Company Name"
+        self.placeholder_companytext : str = "Company Name"
+        self.default_map: dict[ctk.CTkEntry | ctk.CTkComboBox, str] = {}
+        self.input_columns = []
 
+        self.entry_usertext = ctk.StringVar(self, self.placeholder_usertext)
+        self.widget_user : ctk.CTkEntry | ctk.CTkComboBox = None
+        self.create_user_entry()
         self.user_is_duplicate : bool = False #check if two rows are the same person to prevent running twice
-
-        #User widget starts as entry but could be a combo box
-        self.entry_usertext = ctk.StringVar(self, default_usertext)
-        self.widget_user = ctk.CTkEntry(self, width=120, placeholder_text=self.entry_usertext.get(), textvariable=self.entry_usertext)
-        self.widget_user.grid(row=0, column=0, sticky="n")
-        self.widget_user.bind("<FocusOut>", lambda event: self.on_deselect(default_usertext))
-        self.widget_user.bind('<Control-v>', lambda event : self.paste_user(self.widget_user))
+        self.cb_user_map: dict[str, str] = {}  # this is used for multiple users
 
         self.entry_emailtext = ctk.StringVar(self, default_emailtext)
         self.entry_email = ctk.CTkEntry(self, width=240, placeholder_text=self.entry_emailtext.get(), textvariable=self.entry_emailtext)
         self.entry_email.grid(row=0, column=1, sticky="n")
         self.entry_email.bind("<FocusOut>", lambda event: self.on_deselect(default_emailtext))
         self.entry_email.bind('<Control-v>', lambda event : self.paste_user(self.entry_email))
+        self.default_map[self.entry_email] = default_emailtext
 
         self.combo_project = ctk.CTkComboBox(self, width=160, values=project_vals, command=lambda event: self.on_deselect("Project"))
         self.combo_project.grid(row=0, column=2, sticky="n")
         self.app.check_for_duplicates("Project", self) #run once to make all project selectors same colour
 
-        # Company widget starts as entry but could be a combo box
-        self.entry_companytext = ctk.StringVar(self, default_companytext)
-        self.widget_company = ctk.CTkEntry(self, width=160, placeholder_text=self.entry_companytext.get(), textvariable=self.entry_companytext)
-        self.widget_company.grid(row=0, column=3, sticky="n")
-        self.widget_company.bind("<FocusOut>", lambda event: self.on_deselect(default_companytext))
+        self.entry_companytext = ctk.StringVar(self, self.placeholder_companytext)
+        self.widget_company : ctk.CTkEntry | ctk.CTkComboBox = None
+        self.create_company_entry()
 
-        self.default_map: dict[ctk.CTkEntry, str] = {
-            self.widget_user: default_usertext,
-            self.entry_email: default_emailtext,
-            self.widget_company: default_companytext
-        }
-
-        self.input_columns = [self.widget_user, self.entry_email, self.combo_project, self.widget_company]
+        self.input_columns += [self.combo_project, self.entry_email]
 
         check_var = ctk.StringVar(value="off")
         self.cb_select = ctk.CTkCheckBox(self, text="", variable=check_var, width=10, command=None, onvalue="on", offvalue="off")
         self.cb_select.configure(state="disabled")
         self.cb_select.grid(row=0, column=4, padx=(10,0), sticky="ne")
 
-        self.app.logger.info(self.is_selected())
+    @classmethod
+    def resetID(self):
+        RowFrame.__nextID = 1
+
+    def create_company_entry(self):
+        # Company widget starts as entry but could be a combo box
+        self.widget_company = ctk.CTkEntry(self, width=160, textvariable=self.entry_companytext, placeholder_text=self.placeholder_companytext)
+        self.widget_company.grid(row=0, column=3, sticky="n")
+        self.widget_company.bind("<FocusOut>", lambda event: self.on_deselect(self.placeholder_companytext))
+        self.default_map[self.widget_company] = self.placeholder_companytext
+        self.input_columns.append(self.widget_company)
+
+    def create_user_entry(self):
+        # User widget starts as entry but could be a combo box
+        self.widget_user = ctk.CTkEntry(self, width=120,
+                                        textvariable=self.entry_usertext, placeholder_text=self.placeholder_usertext)
+        self.widget_user.grid(row=0, column=0, sticky="n")
+        self.widget_user.bind('<Control-v>', lambda event: self.paste_user(self.widget_user))
+        self.widget_user.bind("<FocusOut>", lambda event: self.on_deselect(self.placeholder_usertext))
+        self.default_map[self.widget_user] = self.placeholder_usertext
+        self.input_columns.append(self.widget_user)
 
     def on_deselect(self, duplicate_type : str):
+        if self.current_status() == "GREEN": #if valid row and text is then edited, row needs resetting
+            self.reset_row_status()
         self.app.check_for_duplicates(duplicate_type, self)
+        #if duplicate_type == "USER NAME" and
 
     def default_usertext(self) -> str:
         return self.default_map[self.widget_user]
@@ -451,10 +533,10 @@ class RowFrame(ctk.CTkFrame):
     def check_if_valid(self) -> bool:
         #We need the name and email address, if theres no company, we can search for this later. we need email for the tracker/emailing, and the name for searching directory
         if self.user_is_duplicate or any(map(self.check_is_default, [self.widget_user, self.entry_email])):
-            self.app.logger.info("Row %d is not valid" % self.id)
+            self.app.logger.debug("Row %d is not valid" % self.id)
             self.is_valid = False
         else:
-            self.app.logger.info("Row %d is valid" % self.id)
+            self.app.logger.debug("Row %d is valid" % self.id)
             self.is_valid = True
             self.status = "IDLE"
 
@@ -479,12 +561,36 @@ class RowFrame(ctk.CTkFrame):
         else:
             return self.status
 
+    def reset_row_status(self):
+        if type(self.widget_user) == ctk.CTkComboBox:
+            self.app.logger.debug("Resetting widget_user to entry")
+            self.input_columns.remove(self.widget_user)
+            self.widget_user.destroy()  # destroy entry
+            self.create_user_entry()
+
+        if type(self.widget_company) == ctk.CTkComboBox:
+            self.app.logger.debug("Resetting widget_company to entry")
+            self.input_columns.remove(self.widget_company)
+            self.widget_company.destroy()
+            self.create_company_entry()
+
+        self.user_id = None
+        self.update_status("IDLE")
+
     def update_status(self, status : str):
         self.status = status
         self.change_row_colour()
 
+    def enable_tickbox(self):
+        status = self.current_status()
+        if status == "GREEN":
+            self.cb_select.configure(state="normal")  # enable tickbox
+
+        else:
+            self.app.config.error("COuld not enable tickbox due to row status %s" % status)
+
     def change_row_colour(self):
-        self.set_fg(self.app.INPUT_COLOURSMAP[self.status])
+        self.set_fg(self.app.INPUT_COLOURSMAP[self.current_status()])
 
     #set background colour for all columns in row
     def set_fg(self, colour: str):
@@ -494,21 +600,88 @@ class RowFrame(ctk.CTkFrame):
     #Convert user entry to combo box where users XML is the API directory info
     def user_selection(self, users : list[ET.Element]):
         uservals : list[str] = [] #list of values for combo box
+        # map the combo box value to the actual user ID so we can perform api requests on that specific user later
+        self.cb_user_map = {}
         username : str
+        DEFAULT_TXT : str = "Select user..."
         for userXML in users:
-            #print(userXML.text)
             username = et_findtagtext(userXML, "UserName")
-
+            company = et_findtagtext(userXML, "OrganizationName")
+            userid = et_findtagtext(userXML, "UserId")
+            guest = ""
             #if user is a guest
             if et_findtagtext(userXML, "SearchResultType") == "GUEST_TYPE":
-                username += " (Guest)"
+                guest = "(Guest)"
 
-            uservals.append(username)
+            cbval = "{u} - {c} {g}".format(u=username, c=company, g=guest)
+            uservals.append(cbval)
+            self.cb_user_map[cbval] = userid
 
+        self.input_columns.remove(self.widget_user)
         self.widget_user.destroy() #destroy entry
-        self.widget_user = ctk.CTkComboBox(self, width=120, values=uservals)
+        self.widget_user = ctk.CTkComboBox(self, width=120, values=uservals, command=self.user_selected)
         self.widget_user.grid(row=0, column=0, sticky="n")
+        self.widget_user.set(DEFAULT_TXT) #set to no selection
+        self.default_map[self.widget_user] = DEFAULT_TXT
+        self.input_columns.append(self.widget_user)
         self.app.logger.debug("Converted entry to combobox with values %s" % uservals)
+
+    #when user combobox edited, check which user has been selected
+    def user_selected(self, value):
+        self.app.logger.info("User Selected")
+        self.on_deselect("Full Name")
+        if not value == self.default_usertext():
+            strname, strcompany = self.split_combo(value)
+            print(strname)
+            #update row with these values
+            self.widget_company.set(strcompany)
+            self.widget_user.set(strname)
+            if self.check_if_valid():
+                self.update_status("GREEN")
+                self.user_id = self.cb_user_map[value]
+
+    def split_combo(self, strvar : str) -> tuple[str, str]:
+        strvar = strvar.split(" - ")
+        if len(strvar) != 2:
+            raise IndexError("Combo box value couldn't be split")
+        name = strvar[0]
+        company = strvar[1]
+        return name, company
+
+    #Take the username matches from global directory API search and convert to list of orgs to search
+    def company_selection(self, users : list[ET.Element]):
+        companyvals : list[str] = [] #list of values for combo box
+        DEFAULT_TXT: str = "Select org..."
+        for userXML in users:
+            company = et_findtagtext(userXML, "OrganizationName")
+            guest = ""
+            # if user is a guest
+            if et_findtagtext(userXML, "SearchResultType") == "GUEST_TYPE":
+                guest = "(Guest)"
+
+            cbval = "{c} {g}".format(c=company, g=guest)
+            companyvals.append(cbval)
+
+        self.input_columns.remove(self.widget_company)
+        self.widget_company.destroy()
+        self.widget_company = ctk.CTkComboBox(self, width=160, values=companyvals, command=self.company_selected)
+        self.widget_company.grid(row=0, column=3, sticky="n")
+        self.widget_company.set(DEFAULT_TXT)  # set to no selection
+        self.default_map[self.widget_company] = DEFAULT_TXT
+        self.input_columns.append(self.widget_company)
+        self.app.logger.debug("Converted entry to combobox with values %s" % companyvals)
+
+
+    #when user combobox edited, check which user has been selected
+    def company_selected(self, value):
+        self.app.logger.info("Company Selected")
+        self.on_deselect("Company Name")
+        if not value == self.default_companytext():
+            if self.check_if_valid():
+                open_directory_link(config.project().projectID(), value, self.widget_user.get())
+                config.info("Opening link, please add them to the required project...")
+                self.update_status("GREEN")
+
 
 def main():
     app = App()

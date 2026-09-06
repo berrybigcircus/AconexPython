@@ -4,8 +4,9 @@ import pandas
 
 from Setup.Outlook import find_folder, connect, initProject, getEmAddress
 from Setup.config import config
-from a_NewUser.Directory import filtercontacts
+from a_Directory.Directory import filtercontacts
 from d_Mail.Import.ImportFromExcel import createTemplate, importExcel
+
 
 def main():
     outlook = connect()

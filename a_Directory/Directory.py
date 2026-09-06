@@ -121,11 +121,7 @@ def globalDirectorySearch(parameters: dict, csvOrgAdminList) -> (str, OutlookMai
                 newuser = True
 
         if not newuser:
-            helperparams = {"PROJECT_ID": config.project().projectID(),
-                            "ORG_NAME": companyname,
-                            "LAST_NAME": username.split(' ')[-1]}
-            urlhelper = config.env() + "/hub/index.html?mainTarget=" + quote_plus("/SearchDirectory?DIRECTORY=ACONEX&") + quote_plus(urlencode(helperparams))
-            webbrowser.open(urlhelper)
+            open_directory_link(config.project().projectID(), companyname, username)
             input("Opening link, please add them to the required project...")
             return "rerun", None
 
@@ -153,7 +149,7 @@ def globalDirectorySearch(parameters: dict, csvOrgAdminList) -> (str, OutlookMai
 
     #no data in csv or last checked too long ago
     while orgadmins is None or datechecked < (datetime.datetime.today() - datetime.timedelta(days=DAYSLIMIT)):
-        jsonRes = FindOrgAdmins(orgid)
+        jsonRes = find_org_admins(orgid)
         if jsonRes is None:
             return "Error", None
 
@@ -185,95 +181,21 @@ def globalDirectorySearch(parameters: dict, csvOrgAdminList) -> (str, OutlookMai
     omail = NewUserEmail(config.project(),orgadmins)
     return "newuser", omail
 
-#NEW
-def global_directory_search(csvOrgAdminList, parameters: dict) -> (str, OutlookMail):
-    DAYSLIMIT : int = 90
-    url = config.env() + "/api/directory?" + urlencode(parameters)
-    # search for users, include guests
-    usersFilter = "SearchResults/Directory"
-    userXML, _ = directory_search(url, usersFilter, True)
 
-    newuser : bool = False
+def open_directory_link(projectid : str, companyname: str, username: str):
+    companyname = companyname.translate(str.maketrans({'+': '*',
+                                                       '?': '*'}))
+    helperparams = {"PROJECT_ID": projectid,
+                    "ORG_NAME": companyname,
+                    "LAST_NAME": username.split(' ')[-1]}
+    urlhelper = config.env() + "/hub/index.html?mainTarget=" + quote_plus(
+        "/SearchDirectory?DIRECTORY=ACONEX&") + quote_plus(urlencode(helperparams))
+    webbrowser.open(urlhelper)
 
-    #If in global directory
-    if userXML is not None:
-        companyname = userXML.find('TradingName').text #the trading name is what you're actually searching for on the directory screen
-        username = userXML.find('UserName').text
-
-        #If user is a guest, ask how to proceed
-        if userXML.find("SearchResultType").text == "GUEST_TYPE":
-            inputCheck = input("User %s has been found, but they are a guest. Is a guest account ok for this project? (Y/N): " % username)
-            if inputCheck.upper() != "Y":
-                newuser = True
-
-        if not newuser:
-            helperparams = {"PROJECT_ID": config.project().projectID(),
-                            "ORG_NAME": companyname,
-                            "LAST_NAME": username.split(' ')[-1]}
-            urlhelper = config.env() + "/hub/index.html?mainTarget=" + quote_plus("/SearchDirectory?DIRECTORY=ACONEX&") + quote_plus(urlencode(helperparams))
-            webbrowser.open(urlhelper)
-            input("Opening link, please add them to the required project...")
-            return "rerun", None
-
-    elif userXML is None: #if not in global directory
-        companyname = cleanOrgName(input("Enter the company name: "))
-
-    nuTracker["Done?"].append("No")
-    nuTracker["Date Completed"].append('')
-
-    orgid, orgname = searchForCompany(companyname, usersFilter)
-
-    #If company not found in directory
-    if orgid is None:
-        nuTracker["Company"].append(companyname) #you may need to edit later
-        nuTracker["Action with"].append("User")
-        nuTracker["Comments"].append("New org")
-        omail = NewOrgEmail(config.project())
-        return "neworg", omail
-
-    orgadmins : list[str] = None
-    datechecked : datetime.datetime = None
-
-    # look up org id in csv to find org admins
-    orgname, orgadmins, datechecked = csvOrgAdminList.get(orgid) or (_, None, None)
-
-    #no data in csv or last checked too long ago
-    while orgadmins is None or datechecked < (datetime.datetime.today() - datetime.timedelta(days=DAYSLIMIT)):
-        jsonRes = FindOrgAdmins(orgid)
-        if jsonRes is None:
-            return "Error", None
-
-        orgadmins = parseOrgAdmins(json.loads(jsonRes), False)
-
-        if orgadmins is None:
-            tryagain: str = input("Do you want to search company name again? (Y/N)")
-            if tryagain.lower() != "y":
-                nuTracker["Company"].append(companyname)  # you may need to edit later
-                nuTracker["Action with"].append("User")
-                nuTracker["Comments"].append("New org")
-                omail = NewOrgEmail(config.project())
-                return "neworg", omail
-
-            else:
-                orgid, orgname = searchForCompany(companyname, usersFilter)
-                orgname, orgadmins, datechecked = csvOrgAdminList.get(orgid) or (_, None, None)
-
-        else:
-            datechecked = datetime.datetime.now()
-            break
-
-    updateOrgAdminCSV(csvOrgAdminList, orgid, orgname, orgadmins, datechecked)
-    config.info("Drafting email to org admins - %s" % ", ".join(orgadmins))
-
-    nuTracker["Company"].append(orgname)
-    nuTracker["Action with"].append("Org admin")
-    nuTracker["Comments"].append("New user")
-    omail = NewUserEmail(config.project(),orgadmins)
-    return "newuser", omail
 
 # Find out the org admin(s)
 # there is no api request for org admins, but the xml is available on the web. This means we need to log in and get the cookies for a logged in session
-def FindOrgAdmins(orgid) -> str | None:
+def find_org_admins(orgid) -> str | None:
     url = config.env() + "/internal/projects/" + config.project().projectID() + "/organizations/" + orgid + "/orgAdmins?count=200"
     config.logger.debug(url)
 
@@ -319,7 +241,7 @@ def bulkUpdateCSV():
 
         # no data in csv or last checked too long ago
         if orgadmins is None or datechecked < (datetime.datetime.today() - datetime.timedelta(days=DAYSLIMIT)):
-            jsonRes = FindOrgAdmins(orgid)
+            jsonRes = find_org_admins(orgid)
             if jsonRes is None:
                 continue
             config.logger.debug(jsonRes)
@@ -400,6 +322,15 @@ def parseOrgAdmins(jsonRes, assumeOK : bool = False) -> list[str] | None:
 
     return orgAdminList
 
+def parse_org_admins(jsonRes : dict[str, str]) -> list[str] | None:
+    numResults = int(jsonRes["totalNumberOfOrgAdmins"])
+    if numResults == 0:
+        config.logger.warning("No org admins in this company.")
+        return None
+    oaArr = jsonRes["orgAdmins"]
+    orgAdminList = list(set([(oa['name'] + " <" + oa['email'] + ">") for oa in oaArr]))
+    return orgAdminList
+
 def projectDirectorySearch(parameters):
     session.cache.clear()
     url = config.projecturl() + "/directory?" + urlencode(parameters)
@@ -419,32 +350,16 @@ def projectDirectorySearch(parameters):
 
     return chosenUser
 
-#NEW
-def project_directory_search(parameters):
-    chosenUser = api_project_directory_search(parameters)
-
-    isHB = chosenUser.find("OrganizationName").text == "Henry Brothers" if chosenUser else False
-    if isHB:  # if they are in henry brothers, add to HB confidential as well
-
-        groupid, _ = findMailingGroup(getMailingGroups(config), "HB Confidential")
-        if groupid == 0:
-            config.logger.error("No HB Confidential group found")
-        statuscode, reason = addUserstoMG(groupid,[chosenUser.find("UserId").text])
-        if statuscode == 200:
-            config.info("Henry Brothers user added to HB Confidential.")
-        else:
-            config.error("There was an error adding HB user to HB Confidential. " + reason)
-
-    return chosenUser
-
-
 def api_project_directory_search(parameters) -> tuple[int, Element[str]]:
     session.cache.clear()
     url = config.projecturl() + "/directory?" + urlencode(parameters)
     num_found, searchXML = api_directory_search(url)
-    #chosenUser, _ = directory_search(url, "SearchResults/Directory", True)
     return num_found, searchXML
 
+def api_global_directory_search(parameters: dict) -> tuple[int, Element[str]]:
+    url = config.env() + "/api/directory?" + urlencode(parameters)
+    num_found, searchXML = api_directory_search(url)
+    return num_found, searchXML
 
 def directory_search(url, searchfilter, userSearch=True) -> tuple[ET.Element | None | str, None | str]:
     numFound, root = api_directory_search(url)
@@ -492,7 +407,10 @@ def api_directory_search(url) -> tuple[int, list[ET.Element]]:
     xml = getAPIResponse(url, headers, "searching the directory")
     root = ET.fromstring(xml)
     numFound = int(root.attrib['TotalResults'])
-    searchXML: list[ET.Element] = root.findall("DirectorySearch/SearchResults/Directory")
+    searchXML: list[ET.Element] = root.findall("SearchResults/Directory")
+    if numFound and searchXML is None:
+        raise AssertionError("XML not parsed correctly")
+
     return numFound, searchXML
 
 
@@ -1031,24 +949,33 @@ def main():
     updateTracker(config, nuTracker)
 
 
-def search_on_email(email: str, project : bool = True) -> dict[str, str]:
+def search_on_email(email: str, project_search : bool = True) -> dict[str, str]:
     config.info("Searching on email address %s..." % email)
-    parameters = {"email": email,
-                  "show_groups": "false"}
+    parameters = {"email": email}
 
-    if project:
+    if project_search:
         parameters["show_groups"] = "false"  # don't return mailing groups it breaks it
 
     return parameters
 
-def search_on_name(username : str, project : bool) -> dict[str, str]:
+def search_on_name(username : str, project_search : bool) -> dict[str, str]:
     names = username.split(" ")  # split forename / surname
     surname = names[-1]  # last val
     forename = " ".join(names[:-1])
     config.info("Searching on forename %s, surname %s..." % (forename, surname))
     parameters = {"given_name": forename,
                   "family_name": surname}
-    if project: #if a project search
+    if project_search: #if a project search
+        parameters["show_groups"] = "false"  # don't return mailing groups it breaks it
+
+    return parameters
+
+def search_on_company(company_name : str, project_search : bool) -> dict[str, str]:
+    company_name = cleanOrgName(company_name)
+    config.info("Searching on company name %s..." % company_name)
+    parameters = {"org_name": company_name,
+                  "show_groups": "false"}
+    if project_search: #if a project search
         parameters["show_groups"] = "false"  # don't return mailing groups it breaks it
 
     return parameters
