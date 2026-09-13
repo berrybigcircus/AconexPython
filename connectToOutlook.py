@@ -39,7 +39,7 @@ def main():
 
 def autoRunWF(debug, runset):
     successreturns : list = []
-    projects = ["Northampton JAWS", "Wolverhampton Police"]
+    projects = ["Northampton JAWS", "Wolverhampton Police", "MMUH UTC", "Stechford Police"]
 
     for projectname in projects:
         success = autorunWFComments(debug, projectname)

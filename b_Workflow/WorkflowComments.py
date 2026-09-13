@@ -138,8 +138,13 @@ def exportToExcel(fname: str):
     writer.close()
     config.info("     Workflow data added to ExportedData.xlsx")
 
+def clear_workflowdata():
+    for value in workflowData.values():
+        del value[:]
+
 def main(inputUseTextFile : str, forceAll : bool = True):
     FILEPATH : str = config.project().getWFExportDataLocation()
+    clear_workflowdata()
 
     if inputUseTextFile == "y":
         genTrackerTextFile()
@@ -167,7 +172,7 @@ def main(inputUseTextFile : str, forceAll : bool = True):
                 forceAll = True
 
         if forceAll or not lastrun: #if could not import, run for all
-            config.info("Generating a tracker for all documents " + config.project().projectName())
+            config.info("Generating a tracker for all documents in " + config.project().projectName())
             # Generate a tracker for ALL documents
             wfNewXML = getAllWorkflows()
 
@@ -218,7 +223,8 @@ def getWorkflows(params : str) -> list[Element]:
 #Generate a tracker only on the selected documents
 def genTrackerTextFile():
     #get the documents to search for using the input text file
-    file = open(FOLDERPATH  + "\\docsList.txt", "r")
+    path = config.project().folderroot + "\\b_Workflow\\docsList.txt"
+    file = open(path, "r")
     textLines = [line.rstrip() for line in file]
     textLines = textLines[1::]  # remove top info line
     file.close()

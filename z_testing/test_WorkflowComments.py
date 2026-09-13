@@ -1,12 +1,13 @@
 import os
-import string
 from unittest import TestCase
 
 import pytest
 
 from Setup.Doc import search_for_tracker
+from Setup.Outlook import initProject, autorunWFComments
 from Setup.config import config, refreshTracker
-from b_Workflow.WorkflowComments import uploadWFTracker, main
+from b_Workflow.WorkflowComments import uploadWFTracker, main, searchForWorkflow, clear_workflowdata, addWorkflowData, \
+    workflowData, getAllWorkflows
 from z_testing.test_config import TestConfig
 
 
@@ -50,6 +51,26 @@ class TestWF(TestCase):
         tconfig.init_JFW()
 
         assert main(inputUseTextFile="n", forceAll=True) == True
+
+    def test_clear_wfdata(self):
+        tconfig = TestConfig()
+        tconfig.init_JFW()
+
+        addWorkflowData(getAllWorkflows())
+        clear_workflowdata()
+        assert workflowData["Document Number"] == []
+
+    def test_autorun(self):
+        projects = ["MMUH UTC", "NUHT CDC"]
+        for projectname in projects:
+            initProject(projectname, "projectnames", False)
+            success = autorunWFComments(False, projectname)
+            if projectname == "Wolverhampton Police":
+                assert config.project().projectName() == "Wolverhampton Police"
+                assert config.project().getWFPickleLocation().endswith("WPS - mails.pkl")
+                assert config.project().getWFExportDataLocation().endswith("WPS - ExportedData.xlsx")
+                assert workflowData["Document Number"] == []
+            assert success
 
 
     #TODO
