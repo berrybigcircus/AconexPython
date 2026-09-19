@@ -193,7 +193,7 @@ def main(inputUseTextFile : str, forceAll : bool = True):
             wfpath = FILEPATH.replace("ExportedData.xlsx",
                                            "Workflow Tracker.xlsx")  # get the finalised tracker not the raw export
 
-            return uploadWFTracker(config, wfpath)
+            return uploadWFTracker(config, wfpath)[0]
 
 
 def getAllWorkflows() -> list[Element]:
@@ -259,12 +259,8 @@ def uploadWFTracker(config, filepath, force_upload : bool = False):
 
     if force_upload or dategen:
         docnumber = config.project().getWFTrackerNumber()
-        docxml = search_for_tracker(config, filepath, docnumber, dategen)
-        if docxml:
-            config.logger.info("Workflow Tracker uploaded to register.")
-
-        return True
+        return search_for_tracker(config, filepath, docnumber, dategen)
 
     else:
         config.logger.warning("Tracker at %s not uploaded." % filepath)
-        return False
+        return False, None

@@ -12,7 +12,7 @@ from b_Workflow.WorkflowComments import uploadWFTracker, main, clear_workflowdat
 from z_testing.test_config import TestConfig
 
 
-class TestWF(TestCase):
+class TestWF:
     @pytest.mark.integration
     def wftrackerpath(self):
         exp_filepath = config.project().getWFExportDataLocation()
@@ -26,16 +26,22 @@ class TestWF(TestCase):
         tconfig.init_CMUH()
         docnumber = config.project().getWFTrackerNumber()
         dategen = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-        docxml = search_for_tracker(config, config.project().getWFExportDataLocation(), docnumber, dategen, silent=False)
-        config.logger.debug(docxml)
+        search_for_tracker(config, config.project().getWFExportDataLocation(), docnumber, dategen, silent=False)
+
 
     @pytest.mark.integration
     #upload only, no refresh
     def test_upload_wftracker(self):
         tconfig = TestConfig()
-        tconfig.init_CMUH()
+        tconfig.init_SPR()
+        assert uploadWFTracker(config, self.wftrackerpath(), True)
 
-        assert uploadWFTracker(config, self.wftrackerpath(), True) != False
+    @pytest.mark.integration
+    def test_throttle_upload(self, caplog):
+        self.test_upload_wftracker()
+        self.test_upload_wftracker()
+        assert caplog.records[-1].message != "Failed to supersede"
+
 
     @pytest.mark.integration
     #refresh then upload
@@ -51,7 +57,7 @@ class TestWF(TestCase):
         tconfig = TestConfig()
         tconfig.init_JFW()
 
-        assert uploadWFTracker(config, self.wftrackerpath(), False) != False
+        assert uploadWFTracker(config, self.wftrackerpath(), False)
 
     @pytest.mark.integration
     #Test full wf tracker update, refresh and upload

@@ -1,4 +1,5 @@
 import datetime
+import time
 import webbrowser
 from base64 import b64encode
 from xml.etree import ElementTree as ET
@@ -6,7 +7,7 @@ from xml.etree.ElementTree import Element
 
 import requests
 
-from Setup.APIcommon import getPages, postAPIFile, et_findtagtext
+from Setup.APIcommon import getPages, postAPIFile, et_findtagtext, session
 from Setup.Directory import findMailingGroups, addUserIds
 from Setup.FormField import AconexFormField, createxmltemplate
 from Setup.Mail import openDraftLink
@@ -53,7 +54,6 @@ def searchForDocs(config, searchTerm: str, returnfields: str) -> list[Element] |
                   "return_fields": returnfields,
                   "search_query": searchTerm
                   }
-
     headers = {'Authorization': config.bearer()}
     baseurl = config.projecturl() + "/register"
     docxml = getPages(headers, parameters, baseurl, "searching for documents using term %s" % searchTerm)
@@ -70,12 +70,13 @@ def getDocumentLink(config, trackingid):
     webbrowser.open(docsearchlink)
 
 
-def search_for_tracker(config, filepath : str, docnumber: str, dategen: str, silent : bool = True) -> bool | Element[str]:
+def search_for_tracker(config, filepath : str, docnumber: str, dategen: str, silent : bool = True) -> bool:
     # check if tracker exists already
     config.logger.info("Searching for %s in doc register" % docnumber)
 
     #Get the searchable fields and return all of these
     returnfields = ",".join([df.search_field() for df in config.required_return_doc_fields()]) + ",trackingid" #we need to add tracking id because we need it for the link later
+    session.cache.clear() #clear before re-searching as if the tracker was just superseded, it will still load an old version
     docxml = searchForDoc(config, "docno:{}".format(docnumber), returnfields)
 
     url = config.projecturl() + "/register/"
@@ -90,26 +91,49 @@ def search_for_tracker(config, filepath : str, docnumber: str, dategen: str, sil
     else:
         config.logger.info("Tracker found in register.")
 
-        docid, trackingid, xmldata = create_doc_xml(config, dategen, docxml, filepath)
+        docid, xmldata = create_doc_xml(config, dategen, docxml, filepath)
 
         url += docid + "/supersede"
         response = requests.post(url, headers=headers, data=xmldata)
 
         if response.status_code != 200:
             config.error("There was an error superseding the tracker. %s" % response.reason)
-            config.debug(response.text)
-            return False
+            errorxml = ET.fromstring(response.text)
+            if et_findtagtext(errorxml, "ErrorCode", check_exists=True) == "CANNOT_SUPERSEDE_NON_CURRENT_DOCUMENT":
+                config.logger.info("Waiting to search again for new tracking id...")
+                new_doc_id = docid
+                MAX_TRIES : int = 3
+                tries = 0
+                while new_doc_id == docid and tries < MAX_TRIES:
+                    time.sleep(1)
+                    session.cache.clear()
+                    docxml = searchForDoc(config, "docno:{}".format(docnumber), returnfields)
+                    new_doc_id = docxml.attrib["DocumentId"]
+                    tries +=1
+
+                if new_doc_id != docid:
+                    url = config.projecturl() + "/register/" + new_doc_id + "/supersede"
+                    response = requests.post(url, headers=headers, data=xmldata)
+
+                else:
+                    config.logger.error("Failed to supersede")
+
+            if response.status_code != 200:
+                return False
 
         config.logger.info("Tracker superseded")
 
         if not silent:
+            trackingid = docxml.find("TrackingId").text
             getDocumentLink(config, trackingid)
             newdocid = et_findtagtext(ET.fromstring(response.text), "RegisterDocumentResult")
             registerTransmittal(config, newdocid)
 
+        return True
+
 
 def create_doc_xml(config, dategen: str, docxml: Element[str], filepath: str) -> tuple[
-    str, str, str | None]:
+    str, str | None]:
     filename = filepath.split("\\")[-1]
     doctemplatexml = createxmltemplate('Document', config.mandatory_doc_fields())
     root = doctemplatexml.getroot()
@@ -119,7 +143,6 @@ def create_doc_xml(config, dategen: str, docxml: Element[str], filepath: str) ->
             elem.text = existingval.text
 
     docid = docxml.attrib.pop('DocumentId')
-    trackingid = docxml.find("TrackingId").text
 
     doctemplatexml.find('Revision').text = datetime.datetime.now().strftime("%Y/%m/%d")
     doctemplatexml.find('HasFile').text = "true"
@@ -141,7 +164,7 @@ def create_doc_xml(config, dategen: str, docxml: Element[str], filepath: str) ->
 
     if config.searchForFormField('Milestone Date'):
         mdate = ET.Element('MilestoneDate')
-        mdate.text = str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")) #"%Y-%m-%dT%H:%M:%S.%f"
+        mdate.text = str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z"))
         doctemplatexml.getroot().append(mdate)
 
     if not doctemplatexml.find('Comments'):
@@ -159,7 +182,7 @@ def create_doc_xml(config, dategen: str, docxml: Element[str], filepath: str) ->
         xmldata = xmldata + encStr + "\n\n--myboundary--"
 
     f.close()
-    return docid, trackingid, xmldata
+    return docid, xmldata
 
 #TODO
 def registerTransmittal(config, docid: str):
