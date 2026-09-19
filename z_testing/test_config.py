@@ -13,6 +13,10 @@ class TestConfig(TestCase):
 
     def init_WPS(self):
         init(UK1setup.bearer, UK1setup.env, debug=["Wolverhampton Police", "268456307", "WPS"])
+        assert config.projectname() == "Wolverhampton Police"
+
+    def init_SPR(self):
+        init(UK1setup.bearer, UK1setup.env, debug=["Stechford Police", "268456391", "SPR"])
 
     def init_JFW(self):
         init(UK1setup.bearer, UK1setup.env, debug=["Northampton JAWS", "268459784", "JFW"])
@@ -56,4 +60,5 @@ class TestConfig(TestCase):
         filepath = r"C:\Users\nicole.millinship\PycharmProjects\AconexPython\b_Workflow\Trackers\JFW - Workflow Tracker.xlsx"
 
         print(get_modification_time(filepath))
+
 

@@ -259,12 +259,8 @@ def uploadWFTracker(config, filepath, force_upload : bool = False):
 
     if force_upload or dategen:
         docnumber = config.project().getWFTrackerNumber()
-        docxml = search_for_tracker(config, filepath, docnumber, dategen)
-        if docxml:
-            config.logger.info("Workflow Tracker uploaded to register.")
-
-        return True
+        return search_for_tracker(config, filepath, docnumber, dategen)
 
     else:
         config.logger.warning("Tracker at %s not uploaded." % filepath)
-        return False
+        return False, None

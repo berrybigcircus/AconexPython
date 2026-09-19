@@ -18,9 +18,10 @@ class TestDoc(TestCase):
         getDocumentLink(config, "1348828088504028609")
 
     def test_docfields(self):
-        tconfig = TestConfig()
-        tconfig.init_CMUH()
-        config.docfields()
+        if not config:
+            tconfig = TestConfig()
+            tconfig.init_CMUH()
+            config.docfields()
 
         assert config.docfields() is not None and not []
         assert config.return_doc_fields() is not None and not []
@@ -38,9 +39,12 @@ class TestDoc(TestCase):
         assert "Tracking ID" in searchabledocfieldnames
         assert "Tracking ID" not in [df.label() for df in config.required_return_doc_fields()]
 
+        if config.projectname() == "Wolverhampton Police":
+            assert "VDR Code" in mandatorydocfieldnames
+
     def test_searchfordoc(self):
         tconfig = TestConfig()
-        tconfig.init_CMUH()
+        tconfig.init_WPS()
         self.test_docfields()
         returnfields = ",".join([df.search_field() for df in config.required_return_doc_fields()]) + ",trackingid"
         print(returnfields)
@@ -49,13 +53,20 @@ class TestDoc(TestCase):
 
         et_findtagtext(docxml, "Author")
         et_findtagtext(docxml, "DocumentStatus")
+        et_findtagtext(docxml, "Vdrcode")
         return docxml
 
     @pytest.mark.integration
     def test_createdocxml(self):
         docxml = self.test_searchfordoc()
+
         _, _, xmldata = create_doc_xml(config, "2000/01/01", docxml, config.project().getWFExportDataLocation())
-        assert "SelectList3" in xmldata
+
+        if config.project().projectName() == "MMUH UTC":
+            assert "SelectList3" in xmldata
+
+        elif config.project().projectName() == "Wolverhampton Police":
+            assert "Vdrcode" in xmldata
 
     def test_mandatory_doc_fields(self):
         tconfig = TestConfig()

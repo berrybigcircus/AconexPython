@@ -235,9 +235,7 @@ def uploadRFITracker(config, filepath, force_upload : bool = False):
 
     if force_upload or dategen:
         docnumber = config.project().getRFIDocNumber()
-        docxml = search_for_tracker(config, filepath, docnumber, dategen)
-        if docxml:
-            config.logger.info("RFI Tracker uploaded to register.")
+        return search_for_tracker(config, filepath, docnumber, dategen)
 
     else:
         config.logger.warning("Tracker at %s not uploaded." % filepath)
