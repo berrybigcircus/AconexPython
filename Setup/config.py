@@ -8,7 +8,7 @@ import time
 if sys.platform == "win32":
     import pywintypes
 
-from Setup.APIcommon import getAPIResponse
+from Setup.APIcommon import getAPIResponse, et_findtagtext
 from Setup.Doc import DocFormField
 from Setup.Mail import AconexMailType, MailFormField
 from Setup.Project import Project, projectSelection
@@ -223,23 +223,44 @@ class Config:
             #this is the list of fields that can be searched on
             searchxml = ET.fromstring(schemaxml.strip()).findall("./SearchSchemaFields/")
 
-            for creationfield in creationxml:
-                label = creationfield.find('FieldName').text
-                fid = creationfield.find('Identifier').text
-                dt = creationfield.find('DataType').text
+            for creationfieldxml in creationxml:
+                label = et_findtagtext(creationfieldxml, "FieldName")
+                fid = et_findtagtext(creationfieldxml, "Identifier")
+                dt = et_findtagtext(creationfieldxml, "DataType")
 
-                mandatorystr = creationfield.find('Attributes/EntityField').attrib['MandatoryStatus']
+                mandatorystr = creationfieldxml.find('Attributes/EntityField').attrib['MandatoryStatus']
 
                 docfield = DocFormField(label, fid, dt, mandatorystr)
+                if creationfieldxml.find("ModifiedFieldName"):
+                    docfield.modifiedname = et_findtagtext(creationfieldxml, "ModifiedFieldName")
 
-                searchequiv = list(filter(lambda sf : sf.find('FieldName').text == label, searchxml))#searchxml.find('./[FieldName={}').format(label)
-                docfield.setSearchable(len(searchequiv) == 1)
+                searchequiv = list(filter(lambda sf : sf.find('FieldName').text == label, searchxml))
+                docfield.setSearchable(searchequiv)
 
-                schemavals = creationfield.findall("SchemaValues/SchemaValue")
+                schemavals = creationfieldxml.findall("SchemaValues/SchemaValue")
                 if schemavals:
                     docfield.setSelectionList(schemavals)
 
                 self.DOCFIELDS.append(docfield)
+
+            #store the list of searchable fields that you dont use when creating a document, e.g. tracking id
+            search_onlyxml = list(filter(lambda sf : sf.find('FieldName').text not in [df.label() for df in self.DOCFIELDS], searchxml))
+
+            for searchfieldxml in search_onlyxml:
+                label = searchfieldxml.find('FieldName').text
+                fid = searchfieldxml.find('Identifier').text
+                dt = searchfieldxml.find('DataType').text
+                docfield = DocFormField(label, fid, dt, "NOT_MANDATORY")
+                docfield.searchfield = fid
+                docfield.searchable(True)
+                docfield.search_only = True
+
+                schemavals = searchfieldxml.findall("SchemaValues/SchemaValue")
+                if schemavals:
+                    docfield.setSelectionList(schemavals)
+
+                self.DOCFIELDS.append(docfield)
+
 
         return self.DOCFIELDS
 
@@ -252,19 +273,26 @@ class Config:
             config.logger.warning("No form field found called %s" % fieldname)
             return None
 
-    def mandatorydocfields(self) -> list[DocFormField]:
+    def mandatory_doc_fields(self) -> list[DocFormField]:
         return list(filter(lambda df: df.isMandatory(), self.docfields()))
 
-    #standard form field with a Name and ID only
+    #these are only the ones that can be returned by list documents
+    def return_doc_fields(self) -> list[DocFormField]:
+        return list(filter(lambda df: df.isSearchable(), self.docfields()))
+
+    #these are the ones that can be returned, and that must go into the register doc xml
+    def required_return_doc_fields(self) -> list[DocFormField]:
+        return list(filter(lambda df: df.isSearchable() and df.isMandatory(), self.docfields()))
+
+    def select_list_doc_fields(self) -> list[DocFormField]:
+        return list(filter(lambda df: df.datatype() in ["LIST", "LIST_WITH_CODES"], self.docfields()))
+
     def formfieldidsandvals(self, fieldname) -> dict:
-        tempdict = {}
         formfield: DocFormField = self.searchForFormField(fieldname)
 
-        for dt in formfield.selectionXML:
-            v = dt.find('Value').text
-            i = dt.find('Id').text
-            tempdict[v] = i
-
+        if not formfield: raise ValueError("No form field found called %s" % fieldname)
+        if not formfield.selectionList: raise ValueError("Form field %s does not have a list of values" % fieldname)
+        tempdict = formfield.selectionList.dict_form()
         return tempdict
 
     def docStatuses(self) -> dict:

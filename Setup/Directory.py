@@ -9,21 +9,21 @@ import xml.etree.ElementTree as ET  # for parsing xml
 
 class AconexUser():
     def __init__(self, name, org, disttype):
-        self.__name : str = name
-        self.__org : str = org
-        self.__disttype : str = disttype
+        self._name : str = name
+        self._org : str = org
+        self._disttype : str = disttype
 
     def name(self) -> str:
-        return self.__name
+        return self._name
 
     def org(self) -> str:
-        return self.__org
+        return self._org
 
     def wasSentFrom(self) -> bool:
-        return self.__disttype == "FROM"
+        return self._disttype == "FROM"
 
     def wasSentTo(self) -> bool:
-        return self.__disttype == "TO" #if it was to them, not cc, bcc, or sent by them
+        return self._disttype == "TO" #if it was to them, not cc, bcc, or sent by them
 
 
 class OutlookMail:

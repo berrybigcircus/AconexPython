@@ -32,29 +32,29 @@ nuTracker = { #the headings of the new user tracker
 class OutlookContact:
     def __init__(self, contactitem, aconexid):
         self.contactitem = None
-        self.__fullname : str = None
-        self.__email : str = None
-        self.__mobile : str = None
-        self.__role : str = None
-        self.__aconexID : str = None
+        self._fullname : str = None
+        self._email : str = None
+        self._mobile : str = None
+        self._role : str = None
+        self._aconexID : str = None
 
         from Setup.Outlook import getEmAddress
 
         if contactitem:
             config.logger.info("Creating OutlookContact object")
             self.contactitem = contactitem
-            self.__fullname = contactitem.FullName
-            self.__email = getEmAddress(contactitem)
-            self.__mobile = contactitem.MobileTelephoneNumber
-            self.__role = contactitem.JobTitle
-            self.__aconexID = contactitem.GovernmentIDNumber
+            self._fullname = contactitem.FullName
+            self._email = getEmAddress(contactitem)
+            self._mobile = contactitem.MobileTelephoneNumber
+            self._role = contactitem.JobTitle
+            self._aconexID = contactitem.GovernmentIDNumber
             self.setaconexid(aconexid)
-            config.logger.debug(", ".join([self.__fullname, self.__email, self.__mobile, self.__role, self.__aconexID]))
+            config.logger.debug(", ".join([self._fullname, self._email, self._mobile, self._role, self._aconexID]))
 
     def addToContacts(self, contactsfolder):
         self.contactitem = contactsfolder.Items.Add("IPM.Contact")
         self.contactitem.Email1Address = self.email()
-        self.contactitem.FullName = self.__fullname
+        self.contactitem.FullName = self._fullname
         self.contactitem.MobileTelephoneNumber = self.mobile()
         self.contactitem.JobTitle = self.role()
         self.contactitem.GovernmentIDNumber = self.getaconexid()
@@ -64,36 +64,36 @@ class OutlookContact:
         return self.contactitem is not None
 
     def email(self) -> str:
-        return self.__email if self.__email else ""
+        return self._email if self._email else ""
 
     def mobile(self) -> str:
-        return self.__mobile if self.__mobile else ""
+        return self._mobile if self._mobile else ""
 
     def role(self) -> str:
-        return self.__role if self.__role else ""
+        return self._role if self._role else ""
 
     def getaconexid(self) -> str | None:
-        return self.__aconexID
+        return self._aconexID
 
     def setaconexid(self, aid : str):
-        if not self.__aconexID:
-            self.__aconexID = aid
+        if not self._aconexID:
+            self._aconexID = aid
             if self.contactitem is not None:
                 self.contactitem.GovernmentIDNumber = aid
                 self.contactitem.Save()
                 config.logger.info("Outlook Contact updated with ID {i}".format(i=self.contactitem.GovernmentIDNumber))
 
     def setfullname(self, fullname : str):
-        self.__fullname = fullname
+        self._fullname = fullname
 
     def setemail(self, email : str):
-        self.__email = email
+        self._email = email
 
     def setmobile(self, mobile : str):
-        self.__mobile = mobile
+        self._mobile = mobile
 
     def setrole(self, role : str):
-        self.__role = role
+        self._role = role
 
 def searchForCompany(companyname, usersFilter):
     parameters = {"org_name": companyname}

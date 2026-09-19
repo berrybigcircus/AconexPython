@@ -230,7 +230,7 @@ def genTrackerTextFile():
     file.close()
 
     wfReviewsXml = getAllWorkflows()
-    returnfields = "trackingid,docno,title,revision,author,reviewstatus,reviewSource"
+    returnfields = "trackingid,docno,title,revision,author,reviewstatus,reviewSource,vdrcode"
 
     for iLine in textLines:
         #search up the user's doc number

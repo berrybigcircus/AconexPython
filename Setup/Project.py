@@ -5,11 +5,11 @@ from Setup.APIcommon import indexInput
 
 class Project():
     def __init__(self, pname: str, pID: str, pCode: str = None):
-        self.__projectname = pname
-        self.__projectID = pID
-        self.__projectCode = pCode
+        self._projectname = pname
+        self._projectID = pID
+        self._projectCode = pCode
 
-        self.__mailTypes = None
+        self._mailTypes = None
 
         self.folderroot = str(pathlib.Path(__file__).parents[1].resolve())
 
@@ -17,23 +17,23 @@ class Project():
         # sanitise MTP project name
         if self.projectCode() == "MTP":
             return "MTP"
-        return self.__projectname
+        return self._projectname
 
     def projectID(self) -> str:
-        return self.__projectID
+        return self._projectID
 
     def projectCodePrefix(self) -> str:
-        if self.__projectCode:
-            return self.__projectCode + " - "
+        if self._projectCode:
+            return self._projectCode + " - "
         else:
             return ""
 
     def projectCode(self) -> str:
-        return self.__projectCode
+        return self._projectCode
 
     #list the RFI mail types that are valid for this project, that can start a RFI thread
     def getRFISetup(self ) -> (str, list[str]):
-        match self.__projectCode:
+        match self._projectCode:
             case "HBT":
                 return "RFI Description", ["Request For Information", "Tender RFI"]  #for EA1 testing
             case "LEU":
@@ -44,7 +44,7 @@ class Project():
                 return "RFI Description", ["Sub-Contractor RFI", "Request For Information",  "Client RFI"]
 
     def getRFIReplySetup(self) -> (str, list[str]):
-        match self.__projectCode:
+        match self._projectCode:
             case "HBT":
                 return "RFI Response", ["RFI Response"]
             case "LEU":
@@ -56,66 +56,66 @@ class Project():
 
     #this is the name of the mail field that tracks who the rfi goes to. it is needed to know who the action is with in the tracker
     def getRFIDiscSetup(self) -> str:
-        if self.__projectCode in ["TEST", "LEU"]:
+        if self._projectCode in ["TEST", "LEU"]:
             return "Action With"
         else: #luckily i always call it discipline nowadays
             return "Discipline"
 
     #The project naming might determine which doc number it needs to be under
     def getRFIDocNumber(self) -> str:
-        if self.__projectCode == "JFW":
-            return "{}-HBC-XX-XX-L-W-79904".format(self.__projectCode)
-        elif self.__projectCode == "9910":
+        if self._projectCode == "JFW":
+            return "{}-HBC-XX-XX-L-W-79904".format(self._projectCode)
+        elif self._projectCode == "9910":
             return "CNJC_9910-HBC-NJC-XX-L-W-9904"
-        elif self.__projectCode == "9961":
+        elif self._projectCode == "9961":
             return "CTJC_9661-HBC-TJC-XX-L-W-9904"
-        elif self.__projectCode == "9907":
+        elif self._projectCode == "9907":
             return "CLCC_9907-HBC-LCC-XX-L-W-9904"
-        elif self.__projectCode == "51023":
+        elif self._projectCode == "51023":
             return "CMCC_51023-HBC-MCC-XX-L-W-9904"
-        elif self.__projectCode == "020261":
+        elif self._projectCode == "020261":
             return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7904"
         else:
-            return "{}-HBC-XX-XX-L-X-9904".format(self.__projectCode)
+            return "{}-HBC-XX-XX-L-X-9904".format(self._projectCode)
 
     def getWFTrackerNumber(self) -> str:
-        if self.__projectCode == "JFW":
-            return "{}-HBC-XX-XX-L-W-79905".format(self.__projectCode)
-        elif self.__projectCode == "9910":
+        if self._projectCode == "JFW":
+            return "{}-HBC-XX-XX-L-W-79905".format(self._projectCode)
+        elif self._projectCode == "9910":
             return "CNJC_9910-HBC-NJC-XX-L-W-9905"
-        elif self.__projectCode == "9961":
+        elif self._projectCode == "9961":
             return "CTJC_9661-HBC-TJC-XX-L-W-9905"
-        elif self.__projectCode == "9907":
+        elif self._projectCode == "9907":
             return "CLCC_9907-HBC-LCC-XX-L-W-9905"
-        elif self.__projectCode == "51023":
+        elif self._projectCode == "51023":
             return "CMCC_51023-HBC-MCC-XX-L-W-9905"
-        elif self.__projectCode == "020261":
+        elif self._projectCode == "020261":
             return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7905"
         else:
-            return "{}-HBC-XX-XX-L-X-9905".format(self.__projectCode)
+            return "{}-HBC-XX-XX-L-X-9905".format(self._projectCode)
 
     #return the HB org id for UK1 or EA1 (pre-saved rather than from a get request)
     def getMyOrgID(self) -> str:
-        if self.__projectID == "1879048648":
+        if self._projectID == "1879048648":
             return "1879048779"
         else:
             return "268481852"
 
     def getMyUserID(self) -> str:
-        if self.__projectID == "1879048648": #EA
+        if self._projectID == "1879048648": #EA
             return "1879050797"
         else:
             return "269118732"
 
     def getEWNSetup(self) -> str:
-        match self.__projectCode:
+        match self._projectCode:
             case "HBT":
                 return (["(ECC) Early Warning Notice"],["Response to EWN"])
             case _:
                 return (["Early Warning Notice"], ["Response to Early Warning Notice"])
 
     def getGCMailID(self) -> str:
-        if self.__projectCode == "HBT":
+        if self._projectCode == "HBT":
             return "1879048557"
 
         else:
@@ -123,7 +123,7 @@ class Project():
 
     #this is which mailing groups to auto-transmit the trackers to
     def getDistributeMGs(self):
-        match self.__projectCode:
+        match self._projectCode:
             case "HBT":
                 return ["Fabulous Architects", "Creative Spaces", "All"]
             case "MTP":

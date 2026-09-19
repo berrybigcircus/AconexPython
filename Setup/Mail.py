@@ -20,42 +20,37 @@ class MailFormField(AconexFormField):
         restricted : bool = restricted # i think only mail can have restricted??
         super().__init__(label, fid, datatype, mandatory, value)
 
-    def isSearchable(self) -> bool:
-        if self.__isSearchable is None:
-            pass #TODO
-        return self.__isSearchable
-
 class AconexMailType:
     def __init__(self, typeID, typeName, config):
-        self.__typeID : str = typeID
-        self.__typeName : str = typeName
-        self.__projectFields : list[MailFormField] = None
+        self.typeID : str = typeID
+        self._typeName : str = typeName
+        self._projectFields : list[MailFormField] = None
         self.config : config.Config = config
 
     def __eq__(self, other):
-        return self.__typeID == other.__typeID
+        return self.typeID == other.typeID
 
     def __hash__(self):
-        return hash(self.__typeID)
+        return hash(self.typeID)
 
     def corrtypeid(self) -> str:
-        return self.__typeID
+        return self.typeID
 
     def typename(self) -> str:
-        return self.__typeName
+        return self._typeName
 
     def projectfields(self) -> list[tuple]:
-        if self.__projectFields is None:
+        if self._projectFields is None:
             return []
         else:
-            return list(map(lambda pf: (pf.label(), pf.datatype(), pf.isMandatory()), self.__projectFields))
+            return list(map(lambda pf: (pf.label(), pf.datatype(), pf.isMandatory()), self._projectFields))
 
     def debug(self) :
-        print(self.__typeName)
+        print(self._typeName)
 
     #Use API to get schema for the mail type's form field
     def getFormFields(self, fflink : str):
-        self.__projectFields = []
+        self._projectFields = []
         headers = {'Authorization': self.config.bearer(),
                    'Accept': 'application/vnd.aconex.mail.v2+xml'}
 
@@ -71,13 +66,13 @@ class AconexMailType:
             fid = ffXML.get('identifier')
             mandatory = ffXML.get('mandatory')
             restricted = num_formfields <= i
-            self.__projectFields.append(MailFormField(label, fid, dtype, mandatory, restricted))
+            self._projectFields.append(MailFormField(label, fid, dtype, mandatory, restricted))
 
 
     #since get mail schema only does create mails, get the replies/forwards of this type and return the xml list
     def getReplySchema(self) -> set[ET.Element]:
         #get replies for this mail type ID
-        url = "{purl}/mail/{mailid}/schema/reply".format(purl=self.config.projecturl(), mailid=self.__typeID)
+        url = "{purl}/mail/{mailid}/schema/reply".format(purl=self.config.projecturl(), mailid=self.typeID)
         headers = {'Authorization': self.config.bearer(),
                'Accept': 'application/vnd.aconex.mail.v2+xml'}
 
@@ -86,7 +81,7 @@ class AconexMailType:
             mtfXML = ET.fromstring(xml.strip()).find("./MultiValueSchemaField/./[Identifier='MailTypeId']")
             replymailTypesXML = mtfXML.findall("SchemaValues/SchemaValue")
         else:
-            self.config.logger.error("Could not get reply schema for the mail type %s."  % self.__typeName)
+            self.config.logger.error("Could not get reply schema for the mail type %s." % self._typeName)
             replymailTypesXML = []
 
         #get forwards
@@ -97,7 +92,7 @@ class AconexMailType:
             forwardmailTypesXML = mtfXML.findall("SchemaValues/SchemaValue")
 
         else:
-            self.config.logger.error("Could not get forward schema for the mail type %s." % self.__typeName)
+            self.config.logger.error("Could not get forward schema for the mail type %s." % self._typeName)
             forwardmailTypesXML = []
 
         return set(replymailTypesXML + forwardmailTypesXML)
@@ -183,7 +178,7 @@ class AconexMail():
         return self.mailno == other.mailno
 
     def __lt__(self, other):
-        return self.__sentdate < other.__sentdate
+        return self.sentdate < other.sentdate
 
     def checkForDate(self, dateXML : ET.Element) -> datetime:
         if dateXML is not None:
@@ -192,14 +187,14 @@ class AconexMail():
             return None
     def responsereqDate(self, responsereqdate : ET.Element):
         if responsereqdate is not None:
-            self.__responsereqdate = datetime.strptime(responsereqdate.text, "%Y-%m-%dT%H:%M:%S.%fZ")
+            self._responsereqdate = datetime.strptime(responsereqdate.text, "%Y-%m-%dT%H:%M:%S.%fZ")
 
 
     def sentDate(self, sentdate : str):
-         self.__sentdate = datetime.strptime(sentdate, "%Y-%m-%dT%H:%M:%S.%fZ")
+         self.sentdate = datetime.strptime(sentdate, "%Y-%m-%dT%H:%M:%S.%fZ")
 
     def hasAttach(self, hasAttach : str):
-        self.__hasAttachments = hasAttach == "true"
+        self._hasAttachments = hasAttach == "true"
 
     def isRoot(self) -> bool:
         return self.RootMail
@@ -337,7 +332,7 @@ class AconexMail():
             return None
 
         repmails, _ = zip(*self.Replies)
-        return sorted(repmails, key=lambda rm : rm.__sentdate, reverse=True)[0]
+        return sorted(repmails, key=lambda rm : rm.sentdate, reverse=True)[0]
 
 
     def getFromOrg(self) -> str:
@@ -354,7 +349,7 @@ class AconexMail():
         return self.getToOrgs()
 
     def getDateTimeSent(self) -> str:
-        return datetime.strftime(self.__sentdate, "%d/%m/%Y %H:%M")
+        return datetime.strftime(self.sentdate, "%d/%m/%Y %H:%M")
 
     def getClosedOutDate(self) -> str:
         if self.closedoutDate:
