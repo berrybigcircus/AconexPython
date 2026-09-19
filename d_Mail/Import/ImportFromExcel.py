@@ -13,29 +13,29 @@ from Setup.config import config
 
 class MailColumn:
     def __init__(self, column_name, datatype, mandatory : bool = False):
-        self.__heading : str = column_name
-        self.__datatype : str = datatype
-        self.__isMandatory : bool = mandatory or "*" == self.__heading[-1] #asterisk marks mandatory
-        self.__value : str | list[str] | datetime.datetime | bool = None
+        self._heading : str = column_name
+        self._datatype : str = datatype
+        self._isMandatory : bool = mandatory or "*" == self._heading[-1] #asterisk marks mandatory
+        self._value : str | list[str] | datetime.datetime | bool = None
 
     def heading_name(self) -> str:
-        return self.__heading
+        return self._heading
 
     def is_mandatory(self) -> bool:
-        return self.__isMandatory
+        return self._isMandatory
 
     def get_length(self) -> int:
-        if self.__datatype == "SINGLE_LINE_TEXT":
+        if self._datatype == "SINGLE_LINE_TEXT":
             return 25
-        elif self.__datatype == "DATE":
+        elif self._datatype == "DATE":
             return 13
-        elif self.__datatype == "name":
+        elif self._datatype == "name":
             return 20
-        elif self.__datatype == "namelist" or self.__datatype == "filelist":
+        elif self._datatype == "namelist" or self._datatype == "filelist":
             return 30
-        elif self.__datatype == "confidential" or self.__datatype == "ID":
+        elif self._datatype == "confidential" or self._datatype == "ID":
             return 8
-        elif self.__datatype == "html":
+        elif self._datatype == "html":
             return 80
         else:
             return 30
@@ -50,10 +50,10 @@ class MailColumn:
             if self.is_mandatory():
                 cellformat.set_bold()
 
-            if self.__datatype == "DATE":
+            if self._datatype == "DATE":
                 cellformat =  workbook.add_format({'number_format': 'dd/mm/yyyy'})
 
-            elif self.__datatype == "confidential":
+            elif self._datatype == "confidential":
                 worksheet.data_validation(
                     3,colindex,worksheet.max_row,3,
                     {
@@ -75,7 +75,7 @@ class MailColumn:
             else:
                 worksheet[cellref].font = Font(bold=False)
 
-            if self.__datatype == "DATE":
+            if self._datatype == "DATE":
                 pass #this is not doing anything
                 # for row in range(3, worksheet.max_row):
                 #     cell = worksheet.cell(row=row, column=colindex)
@@ -87,7 +87,7 @@ class MailColumn:
                 #     letter=col_letter)  # apply to whole col except first two rows
                 # dvalidation.add(colrange)
 
-            elif self.__datatype == "confidential":
+            elif self._datatype == "confidential":
                 dvalidation = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
                 worksheet.add_data_validation(dvalidation)
                 colrange = '{letter}3:{letter}1000'.format(letter=col_letter) #apply to whole col except first two rows
@@ -98,45 +98,45 @@ class MailColumn:
 
     #given the inputted cell value, check this is valid for this column
     def validate(self, rowval : str) -> bool:
-        if self.__isMandatory and pandas.isna(rowval):
+        if self._isMandatory and pandas.isna(rowval):
             config.logger.error("Mandatory column '{0}' is empty".format(self.heading_name()))
             return False
 
-        if self.__datatype == "SINGLE_LINE_TEXT" or self.__datatype == "name":
-            self.__value = "" if pandas.isna(rowval) else rowval
-            config.logger.debug(self.__value)
+        if self._datatype == "SINGLE_LINE_TEXT" or self._datatype == "name":
+            self._value = "" if pandas.isna(rowval) else rowval
+            config.logger.debug(self._value)
             return True
 
-        elif self.__datatype == "namelist" or self.__datatype == "filelist":
-            self.__value = rowval.split("; ") if pandas.notna(rowval) else []
-            config.logger.debug(self.__value)
+        elif self._datatype == "namelist" or self._datatype == "filelist":
+            self._value = rowval.split("; ") if pandas.notna(rowval) else []
+            config.logger.debug(self._value)
             return True
 
-        elif self.__datatype == "DATE":
+        elif self._datatype == "DATE":
             if pandas.isna(rowval):
-                self.__value = None
+                self._value = None
             else:
                 try:
                     rowdatetime = rowval.date()
-                    self.__value = rowdatetime
+                    self._value = rowdatetime
                 except ValueError:
                     config.logger.error("Invalid date format {0}'".format(rowval))
                     return False
 
-            config.logger.debug(self.__value)
+            config.logger.debug(self._value)
             return True
-        elif self.__datatype == "html":
+        elif self._datatype == "html":
             #TODO - how to validate this?
-            self.__value = rowval
+            self._value = rowval
             return True
 
-        elif self.__datatype == "confidential":
-            self.__value = (rowval == True)
+        elif self._datatype == "confidential":
+            self._value = (rowval == True)
 
-            config.logger.debug(self.__value)
+            config.logger.debug(self._value)
             return True
 
-        elif self.__datatype == "ID":
+        elif self._datatype == "ID":
             return not pandas.isna(rowval)
 
 #Universal mail cols

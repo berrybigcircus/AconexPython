@@ -39,7 +39,7 @@ class TestConfig(TestCase):
         init(UK1setup.bearer, UK1setup.env, debug=["DfE Wisbech", "268454433", "FS1018"])
 
 
-    def create(self) -> Config:
+    def test_create(self) -> Config:
         self.init_ea()
         assert Config()
         assert config.logger
@@ -50,9 +50,6 @@ class TestConfig(TestCase):
 
         return config
 
-    def test_init(self):
-        self.init_ea()
-        assert Config()
 
     @pytest.mark.integration
     def test_get_modification_time(self):

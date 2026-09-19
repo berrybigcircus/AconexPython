@@ -1,3 +1,4 @@
+import datetime
 import os
 from unittest import TestCase
 
@@ -6,13 +7,13 @@ import pytest
 from Setup.Doc import search_for_tracker
 from Setup.Outlook import initProject, autorunWFComments
 from Setup.config import config, refreshTracker
-from b_Workflow.WorkflowComments import uploadWFTracker, main, searchForWorkflow, clear_workflowdata, addWorkflowData, \
+from b_Workflow.WorkflowComments import uploadWFTracker, main, clear_workflowdata, addWorkflowData, \
     workflowData, getAllWorkflows
 from z_testing.test_config import TestConfig
 
 
 class TestWF(TestCase):
-
+    @pytest.mark.integration
     def wftrackerpath(self):
         exp_filepath = config.project().getWFExportDataLocation()
         assert os.path.exists(exp_filepath)
@@ -20,10 +21,19 @@ class TestWF(TestCase):
         return tracker_filepath
 
     @pytest.mark.integration
+    def test_search_tracker(self):
+        tconfig = TestConfig()
+        tconfig.init_CMUH()
+        docnumber = config.project().getWFTrackerNumber()
+        dategen = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
+        docxml = search_for_tracker(config, config.project().getWFExportDataLocation(), docnumber, dategen, silent=False)
+        config.logger.debug(docxml)
+
+    @pytest.mark.integration
     #upload only, no refresh
     def test_upload_wftracker(self):
         tconfig = TestConfig()
-        tconfig.init_WPS()
+        tconfig.init_CMUH()
 
         assert uploadWFTracker(config, self.wftrackerpath(), True) != False
 
@@ -60,6 +70,7 @@ class TestWF(TestCase):
         clear_workflowdata()
         assert workflowData["Document Number"] == []
 
+    @pytest.mark.integration
     def test_autorun(self):
         projects = ["MMUH UTC", "NUHT CDC"]
         for projectname in projects:
