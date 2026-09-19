@@ -72,7 +72,6 @@ class TestDoc(TestCase):
         dstatuses = config.docStatuses()
         assert "S2 - Suitable for Information" in dstatuses.keys()
 
-
     def test_doctypes(self):
         tconfig = TestConfig()
         tconfig.init_CMUH()
