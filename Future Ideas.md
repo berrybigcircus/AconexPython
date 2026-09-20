@@ -24,6 +24,7 @@
 
 - [ ] Duplicate checklist
 - [ ] Void a selection of checklists
+- [ ] Close a form when its 100% complete
 - [ ] Create QA records based on a template  
 - [ ] Auto-create ownership form when RAMS uploaded. Revisit signature setup
 - [ ] Update a template for all projects
@@ -39,6 +40,7 @@
 
 # [d_Mail](https://github.com/spiritedgravity/AconexPython/tree/master/d_Mail "d_Mail")
 - [ ] 🔴 Robust program that populates a word template with the data from a mail form
+- [ ] 🔴 'Project email' - cc in the email address, scrape the mailbox, and load all emails into Aconex Mailbox
 - [ ] Find a way to auto transmit
 - [ ] What happens when you try to send a WF transmittal??
 - [ ] Reinvestigate getting / updating notes box. Web scrape?

@@ -57,7 +57,7 @@ def mojRFIs():
     # RFITracker.main()
 
     init(UK1setup.bearer, UK1setup.env, debug=["HMCTS Nottingham", "268458266", "9910"])
-    RFITracker.main()
+    #RFITracker.main()
 
     # init(UK1setup.bearer, UK1setup.env, debug=["HMCTS Telford", "268459032", "9661"])
     # RFITracker.main()
@@ -73,7 +73,6 @@ def main():
     # config.setPass(EAsetup.password)
     #init(UK1setup.bearer, UK1setup.env, debug=["DfE Wisbech Free School", "268454433", "FS1018"]) #Wisbech
     #init(UK1setup.bearer, UK1setup.env, debug=["Stechford Police","268456391", "SPR"]) #Stechford
-    #init(UK1setup.bearer, UK1setup.env, debug=["QMC Endoscopy", "268456597", "QMC"]) #QMC Nendo
     #init(UK1setup.bearer, UK1setup.env, debug=["NUHT Community Diagnostics Centre", "268456728", "CDC"]) #CDC
     #init(UK1setup.bearer, UK1setup.env, debug=["MTP", "268457782", "MTP"])
     init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project

@@ -13,6 +13,10 @@ class TestConfig(TestCase):
 
     def init_WPS(self):
         init(UK1setup.bearer, UK1setup.env, debug=["Wolverhampton Police", "268456307", "WPS"])
+        assert config.projectname() == "Wolverhampton Police"
+
+    def init_SPR(self):
+        init(UK1setup.bearer, UK1setup.env, debug=["Stechford Police", "268456391", "SPR"])
 
     def init_JFW(self):
         init(UK1setup.bearer, UK1setup.env, debug=["Northampton JAWS", "268459784", "JFW"])
@@ -41,8 +45,7 @@ class TestConfig(TestCase):
     def init_CLSU(self):
         init(UK1setup.bearer, UK1setup.env, debug=["Lincoln Stroke Unit", "268459019", "CLSU"])
 
-
-    def create(self) -> Config:
+    def test_create(self) -> Config:
         self.init_ea()
         assert Config()
         assert config.logger
@@ -53,13 +56,11 @@ class TestConfig(TestCase):
 
         return config
 
-    def test_init(self):
-        self.init_ea()
-        assert Config()
 
     @pytest.mark.integration
     def test_get_modification_time(self):
         filepath = r"C:\Users\nicole.millinship\PycharmProjects\AconexPython\b_Workflow\Trackers\JFW - Workflow Tracker.xlsx"
 
         print(get_modification_time(filepath))
+
 

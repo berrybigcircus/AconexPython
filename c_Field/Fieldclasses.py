@@ -78,13 +78,13 @@ class PDFForm:
 
 class PDFPage:
     def __init__(self, fields, signatures, links=None):
-        self.__formfields : dict = fields
+        self._formfields : dict = fields
         self.signatureBoxes = signatures
         self.linkAnnotations = links
 
     #return in dictionary format
     def formfields(self) -> dict:
-        return self.__formfields
+        return self._formfields
 
 class SignatureBox:
     def __init__(self, name, width : int, height : int, xpos : int, ypos : int):
@@ -124,11 +124,11 @@ class LinkAnnotation:
     def __init__(self, name, rect:[float]):
         self.annotation = None
         self.name = name
-        self.__rect = rect
+        self._rect = rect
 
     def createLink(self, url:str):
         self.annotation = Link(
-            rect = self.__rect,
+            rect = self._rect,
             url=url
         )
         self.annotation.flags = 4
@@ -163,30 +163,30 @@ class FormCheckbox(FormField):
 class FormLink(FormField):
     def __init__(self, name: str, link):
         super().__init__(name)
-        self.__link = link
+        self._link = link
 
     #Override
     def hasLink(self) -> bool:
         return True
 
     def link(self) -> LinkAnnotation:
-        return self.__link
+        return self._link
 
     def makeUrl(self, url: str):
         if url: #if valid url was created from aconex search of doc register
-            self.__link.createLink(url)
+            self._link.createLink(url)
 
 class FormSignature(FormField):
     def __init__(self, signature, name=None, date=None,  time=None):
         self._name : str = name #name of field asking for person's name
-        self.__date : str = date #date or date+time
-        self.__time : str = time
-        self.__signature : SignatureBox = signature
+        self._date : str = date #date or date+time
+        self._time : str = time
+        self._signature : SignatureBox = signature
 
     #Override
     def fieldNames(self) -> list[str]:
         nameconcat = []
-        for field in [self._name, self.__date, self.__time]:
+        for field in [self._name, self._date, self._time]:
             if field:
                 nameconcat.append(field)
 
@@ -194,11 +194,11 @@ class FormSignature(FormField):
 
     #if time is a separate field or is joined into the date
     def timeSeparate(self) -> bool:
-        return (self.__time)
+        return (self._time)
 
     #override
     def signature(self) -> SignatureBox:
-        return self.__signature
+        return self._signature
 
     def stampSignature(self, pdfpath : str):
         self.signature().createStamp(self.pageheight, pdfpath)
@@ -281,17 +281,17 @@ class SignatureQuestion (Question):
 
 class Questions:
     def __init__(self, questions):
-        self.__questions: list[Question] = questions
-        self.join = (len(self.__questions) > 1) #if there is multiple questions for one pdf field, they need to be joined together
+        self._questions: list[Question] = questions
+        self.join = (len(self._questions) > 1) #if there is multiple questions for one pdf field, they need to be joined together
 
     def getQuestions(self) -> list[Question]:
-        return self.__questions
+        return self._questions
 
     def value(self, separateTime=False) -> list[str]:
         if self.join:
-            return ["\n".join([val for q in self.__questions for val in q.value(separateTime)])]
+            return ["\n".join([val for q in self._questions for val in q.value(separateTime)])]
         else:
-            return [val for q in self.__questions for val in q.value(separateTime)]
+            return [val for q in self._questions for val in q.value(separateTime)]
 
 class FieldTemplate:
     def __init__(self, rawJson : dict):

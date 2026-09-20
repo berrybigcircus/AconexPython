@@ -2,7 +2,6 @@ import json
 import datetime
 import pathlib
 import pickle
-import warnings
 from base64 import b64encode
 from urllib.parse import urlencode
 from xml.etree import ElementTree as ET
@@ -130,27 +129,6 @@ def indexInput(maxVal, allowedVals : list[str] = None) -> int | str | None:
 
         return chosenIndex
 
-#Take ET.Element, and return the text string for specified tag. Handle all errors
-def et_findtagtext(element : ET.Element, tagname : str) -> str:
-    if not element:
-        raise ValueError("Element not found.")
-
-    tag = element.find(tagname)
-    if tag is None:
-        raise AttributeError("%s tag not found within element." % tagname)
-
-    if tag.text:
-        return tag.text
-    else:
-        warnings.warn("Text for tag %s is empty." % tagname)
-        return ""
-
-def debug_element(element : ET.Element):
-    print(f"{element.tag}")
-    for child in element:
-        print(f"    {child.tag}")
-
-
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection
     uniqueID: str = checklistJson["id"]
     firstItem : dict = {}
@@ -192,12 +170,10 @@ def cleanOrgName(orgName : str) -> str:
     if not orgName:
         return ""
 
-    orgName = orgName.translate(str.maketrans("", "", "()&,.-"))
-    orgWords = orgName.split()  # split into words
+    orgWords = orgName.split(" ")  # split into words
     orgWords = orgWords if orgWords[0] not in ORGFILTERSTARTS else orgWords[1:]
     while orgWords[-1] in ORGFILTERENDS:
         orgWords = orgWords[:-1]
-
     return " ".join(orgWords)
 
 

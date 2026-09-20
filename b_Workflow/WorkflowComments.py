@@ -138,8 +138,13 @@ def exportToExcel(fname: str):
     writer.close()
     config.info("     Workflow data added to ExportedData.xlsx")
 
+def clear_workflowdata():
+    for value in workflowData.values():
+        del value[:]
+
 def main(inputUseTextFile : str, forceAll : bool = True):
     FILEPATH : str = config.project().getWFExportDataLocation()
+    clear_workflowdata()
 
     if inputUseTextFile == "y":
         genTrackerTextFile()
@@ -167,7 +172,7 @@ def main(inputUseTextFile : str, forceAll : bool = True):
                 forceAll = True
 
         if forceAll or not lastrun: #if could not import, run for all
-            config.info("Generating a tracker for all documents " + config.project().projectName())
+            config.info("Generating a tracker for all documents in " + config.project().projectName())
             # Generate a tracker for ALL documents
             wfNewXML = getAllWorkflows()
 
@@ -188,7 +193,7 @@ def main(inputUseTextFile : str, forceAll : bool = True):
             wfpath = FILEPATH.replace("ExportedData.xlsx",
                                            "Workflow Tracker.xlsx")  # get the finalised tracker not the raw export
 
-            return uploadWFTracker(config, wfpath)
+            return uploadWFTracker(config, wfpath)[0]
 
 
 def getAllWorkflows() -> list[Element]:
@@ -218,13 +223,14 @@ def getWorkflows(params : str) -> list[Element]:
 #Generate a tracker only on the selected documents
 def genTrackerTextFile():
     #get the documents to search for using the input text file
-    file = open(FOLDERPATH  + "\\docsList.txt", "r")
+    path = config.project().folderroot + "\\b_Workflow\\docsList.txt"
+    file = open(path, "r")
     textLines = [line.rstrip() for line in file]
     textLines = textLines[1::]  # remove top info line
     file.close()
 
     wfReviewsXml = getAllWorkflows()
-    returnfields = "trackingid,docno,title,revision,author,reviewstatus,reviewSource"
+    returnfields = "trackingid,docno,title,revision,author,reviewstatus,reviewSource,vdrcode"
 
     for iLine in textLines:
         #search up the user's doc number
@@ -253,12 +259,8 @@ def uploadWFTracker(config, filepath, force_upload : bool = False):
 
     if force_upload or dategen:
         docnumber = config.project().getWFTrackerNumber()
-        docxml = search_for_tracker(config, filepath, docnumber, dategen)
-        if docxml:
-            config.logger.info("Workflow Tracker uploaded to register.")
-
-        return True
+        return search_for_tracker(config, filepath, docnumber, dategen)
 
     else:
         config.logger.warning("Tracker at %s not uploaded." % filepath)
-        return False
+        return False, None
