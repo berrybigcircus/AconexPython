@@ -193,7 +193,7 @@ def main(inputUseTextFile : str, forceAll : bool = True):
             wfpath = FILEPATH.replace("ExportedData.xlsx",
                                            "Workflow Tracker.xlsx")  # get the finalised tracker not the raw export
 
-            return uploadWFTracker(config, wfpath)
+            return uploadWFTracker(config, wfpath)[0]
 
 
 def getAllWorkflows() -> list[Element]:
