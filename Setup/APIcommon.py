@@ -2,6 +2,7 @@ import json
 import datetime
 import pathlib
 import pickle
+import time
 import warnings
 from base64 import b64encode
 from urllib.parse import urlencode
@@ -12,6 +13,7 @@ import pandas
 import requests_cache
 
 from selenium import webdriver
+from selenium.webdriver.edge.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
@@ -148,6 +150,10 @@ def et_findtagtext(element : ET.Element, tagname : str, check_exists : bool = Fa
         warnings.warn("Text for tag %s is empty." % tagname)
         return ""
 
+def debug_element(element : ET.Element):
+    print(f"{element.tag}")
+    for child in element:
+        print(f"    {child.tag}")
 
 
 def putNoteInFirstQuestion(checklistJson, duplicateID=""): #put the id as a note in the first question of the inspection
@@ -191,12 +197,13 @@ def cleanOrgName(orgName : str) -> str:
     if not orgName:
         return ""
 
-    orgWords = orgName.split(" ")  # split into words
+    orgName = orgName.translate(str.maketrans("", "", "()&,.-"))
+    orgWords = orgName.split()  # split into words
     orgWords = orgWords if orgWords[0] not in ORGFILTERSTARTS else orgWords[1:]
     while orgWords[-1] in ORGFILTERENDS:
         orgWords = orgWords[:-1]
-    return " ".join(orgWords)
 
+    return " ".join(orgWords)
 
 def importLastRun(filename : str) -> datetime.datetime | None:
     print("Importing date from tracker at %s" % filename)
@@ -223,11 +230,17 @@ def importLastRun(filename : str) -> datetime.datetime | None:
         return None
 
 def SelLogIn(config):
-    driver = webdriver.Edge()
+    options = Options()
+    options.add_argument(r'--user-data-dir=C:\Temp\SeleniumProfile')
+
+    options.add_argument("--remote-debugging-port=9222")
+    driver = webdriver.Edge(options=options)
+
     driver.get("{env}/hub/index.html".format(env=config.env()))
     wait = WebDriverWait(driver, 60)
     # type email into first screen
     wait.until(EC.element_to_be_clickable((By.ID, "userName"))).send_keys("nicole.millinship@henrybrothers.co.uk")
+    wait.until(EC.element_to_be_clickable((By.ID, "nextButton")))
     nextbutton = driver.find_element(By.ID, "nextButton")
     nextbutton.click()
 
