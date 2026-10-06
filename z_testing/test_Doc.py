@@ -3,9 +3,10 @@ from unittest import TestCase
 import pytest
 
 from Setup.APIcommon import et_findtagtext
-from Setup.Doc import getDocumentLink, searchForDoc, create_doc_xml
 from Setup.config import config
+from Setup.Doc import getDocumentLink, searchForDoc, create_doc_xml
 from z_testing.test_config import TestConfig
+from xml.etree.ElementTree import Element
 
 
 class TestDoc(TestCase):
@@ -71,7 +72,7 @@ class TestDoc(TestCase):
         tconfig = TestConfig()
         tconfig.init_9910()
         dfields = config.mandatory_doc_fields()
-        print([df.identifier() for df in dfields])
+        [print(df.identifier()) for df in dfields]
 
         assert config.searchForFormField("Select List 3") is not None
 

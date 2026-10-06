@@ -33,7 +33,7 @@ class TestWF:
     #upload only, no refresh
     def test_upload_wftracker(self):
         tconfig = TestConfig()
-        tconfig.init_CMUH()
+        tconfig.init_SPR()
         assert uploadWFTracker(config, self.wftrackerpath(), True)
 
     @pytest.mark.integration
