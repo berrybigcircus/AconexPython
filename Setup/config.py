@@ -45,11 +45,30 @@ class Config:
         self.TOKEN: str
         self.EApass : str = None
         self.logger: logging.Logger = createlogger()
-        self.PROJECT : Project
+        self.PROJECT : Project = None
         self.PROJECTNAME : str
         self.PROJECTURL : str
+        self.FIELDURL : str
 
         self.folderroot = str(pathlib.Path(__file__).parents[1].resolve())
+
+        self.MAILFIELDS : list[MailFormField] = None #the entire mail schema for creating a new mail
+        self.MAILTYPES: list[(bool, AconexMailType)] = None  # bool = True if you can start a thread with the mail type
+        self.CREATEMAILTYPES: list[AconexMailType] = None
+
+        self.DOCFIELDS : list[DocFormField] = None
+        self.DOCSTATUSES : dict = None
+        self.DOCTYPES : dict = None
+
+    def reset(self):
+        self.BEARER: str = None
+        self.ACONEXENV: str  = None
+        self.TOKEN: str = None
+        self.EApass: str = None
+        self.PROJECT : Project = None
+        self.PROJECTNAME : str = None
+        self.PROJECTURL : str = None
+        self.FIELDURL : str = None
 
         self.MAILFIELDS : list[MailFormField] = None #the entire mail schema for creating a new mail
         self.MAILTYPES: list[(bool, AconexMailType)] = None  # bool = True if you can start a thread with the mail type
@@ -67,10 +86,12 @@ class Config:
         if debug is None:  # if none, then assume no project is required
             self.PROJECT = None
             self.PROJECTURL = None
+            self.FIELDURL = None
         else:
             self.PROJECT = projectSelection(debug)
             self.PROJECTNAME = self.PROJECT.projectName()
             self.PROJECTURL = self.ACONEXENV + "/api/projects/" + self.PROJECT.projectID()  # url of the chosen project (using project id)
+            self.FIELDURL = self.ACONEXENV + "/field-management/api/" #field urls are structured different to the others
 
     def setPass(self, spass: str):
         self.EApass = spass
@@ -83,6 +104,9 @@ class Config:
 
     def projecturl(self) -> str:
         return self.PROJECTURL
+
+    def fieldurl(self):
+        return self.FIELDURL
 
     #Logger overriding functions
     def info(self, msg : str):
@@ -318,6 +342,7 @@ def init(passedBearer, env,  debug=[], token=None):
 
     #init may be run more than once so re-create
     else:
+        config.reset()
         config.create(passedBearer, env, debug, token)
 
 #get datetime a file was modified

@@ -18,7 +18,7 @@ class TestDoc(TestCase):
         getDocumentLink(config, "1348828088504028609")
 
     def test_docfields(self):
-        if not config:
+        if not config.project():
             tconfig = TestConfig()
             tconfig.init_CMUH()
             config.docfields()
@@ -41,6 +41,9 @@ class TestDoc(TestCase):
 
         if config.projectname() == "Wolverhampton Police":
             assert "VDR Code" in mandatorydocfieldnames
+
+        if config.projectname() == "MMUH UTC":
+            assert "Select List 3" in mandatorydocfieldnames
 
     def test_searchfordoc(self):
         tconfig = TestConfig()

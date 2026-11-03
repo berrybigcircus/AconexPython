@@ -10,6 +10,7 @@ from Setup.config import config, refreshTracker
 from b_Workflow.WorkflowComments import uploadWFTracker, main, clear_workflowdata, addWorkflowData, \
     workflowData, getAllWorkflows
 from z_testing.test_config import TestConfig
+from z_testing.test_Doc import TestDoc
 
 
 class TestWF:
@@ -78,7 +79,7 @@ class TestWF:
 
     @pytest.mark.integration
     def test_autorun(self):
-        projects = ["MMUH UTC", "NUHT CDC"]
+        projects = ["LRI UTC", "MMUH UTC"]
         for projectname in projects:
             initProject(projectname, "projectnames", False)
             success = autorunWFComments(False, projectname)
@@ -87,6 +88,12 @@ class TestWF:
                 assert config.project().getWFPickleLocation().endswith("WPS - mails.pkl")
                 assert config.project().getWFExportDataLocation().endswith("WPS - ExportedData.xlsx")
                 assert workflowData["Document Number"] == []
+
+            if projectname == "MMUH UTC":
+                assert config.project().projectName() == "MMUH UTC"
+                test_doc = TestDoc()
+                test_doc.test_docfields()
+
             assert success
 
 

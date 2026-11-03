@@ -99,6 +99,7 @@ def search_for_tracker(config, filepath : str, docnumber: str, dategen: str, sil
         if response.status_code != 200:
             config.error("There was an error superseding the tracker. %s" % response.reason)
             errorxml = ET.fromstring(response.text)
+            config.debug(response.text)
             if et_findtagtext(errorxml, "ErrorCode", check_exists=True) == "CANNOT_SUPERSEDE_NON_CURRENT_DOCUMENT":
                 config.logger.info("Waiting to search again for new tracking id...")
                 new_doc_id = docid
