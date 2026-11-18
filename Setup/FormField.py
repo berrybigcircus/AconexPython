@@ -67,7 +67,7 @@ class AconexSchemaValues():
         self.SchemaVals : list[AconexSchemaValue] = []
         for schemaval in schemavals:
             value = et_findtagtext(schemaval, "Value")
-            id = et_findtagtext(schemaval, "Id", check_exists=True)
+            id = et_findtagtext(schemaval, "Id", is_optional=True)
             self.SchemaVals.append(AconexSchemaValue(value, id))
 
     #if the selection list is in the format ID: Value

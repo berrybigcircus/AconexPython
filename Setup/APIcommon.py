@@ -133,13 +133,13 @@ def indexInput(maxVal, allowedVals : list[str] = None) -> int | str | None:
         return chosenIndex
 
 #Take ET.Element, and return the text string for specified tag. Handle all errors
-def et_findtagtext(element : ET.Element, tagname : str, check_exists : bool = False) -> str:
+def et_findtagtext(element : ET.Element, tagname : str, is_optional : bool = False) -> str:
     if element is None:
         raise ValueError("Element not found.")
 
     tag = element.find(tagname)
     if tag is None:
-        if check_exists: #don't fail, just return nothing
+        if is_optional: #don't fail, just return nothing
             return ""
         else:
             raise AttributeError("%s tag not found within element." % tagname)

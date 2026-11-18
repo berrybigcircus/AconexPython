@@ -65,7 +65,7 @@ class TestWF:
     def test_run_WFTracker(self):
         tconfig = TestConfig()
         
-        tconfig.init_JFW()
+        tconfig.init_CDC()
 
         assert main(inputUseTextFile="n", forceAll=True) == True
 

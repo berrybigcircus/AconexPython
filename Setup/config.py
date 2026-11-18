@@ -255,7 +255,7 @@ class Config:
                 mandatorystr = creationfieldxml.find('Attributes/EntityField').attrib['MandatoryStatus']
 
                 docfield = DocFormField(label, fid, dt, mandatorystr)
-                docfield.modifiedname = et_findtagtext(creationfieldxml, "ModifiedFieldName", check_exists=True)
+                docfield.modifiedname = et_findtagtext(creationfieldxml, "ModifiedFieldName", is_optional=True)
 
                 searchequiv = list(filter(lambda sf : sf.find('FieldName').text == label, searchxml))
                 docfield.setSearchable(searchequiv)

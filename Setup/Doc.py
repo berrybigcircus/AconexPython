@@ -49,10 +49,11 @@ def searchForDoc(config, searchTerm : str, returnfields : str) -> Element | None
         return docxml[0]
 
 
-def searchForDocs(config, searchTerm: str, returnfields: str) -> list[Element] | None:
+def searchForDocs(config, searchTerm: str, returnfields: str, show_doc_history : str = "False") -> list[Element] | None:
     parameters = {"search_type": "PAGED",  # PAGED, meaning return results by "pages" of variable size.
                   "return_fields": returnfields,
-                  "search_query": searchTerm
+                  "search_query": searchTerm,
+                  "show_document_history": show_doc_history
                   }
     headers = {'Authorization': config.bearer()}
     baseurl = config.projecturl() + "/register"
@@ -100,7 +101,7 @@ def search_for_tracker(config, filepath : str, docnumber: str, dategen: str, sil
             config.error("There was an error superseding the tracker. %s" % response.reason)
             errorxml = ET.fromstring(response.text)
             config.debug(response.text)
-            if et_findtagtext(errorxml, "ErrorCode", check_exists=True) == "CANNOT_SUPERSEDE_NON_CURRENT_DOCUMENT":
+            if et_findtagtext(errorxml, "ErrorCode", is_optional=True) == "CANNOT_SUPERSEDE_NON_CURRENT_DOCUMENT":
                 config.logger.info("Waiting to search again for new tracking id...")
                 new_doc_id = docid
                 MAX_TRIES : int = 3
