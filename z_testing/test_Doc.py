@@ -3,10 +3,9 @@ from unittest import TestCase
 import pytest
 
 from Setup.APIcommon import et_findtagtext
-from Setup.config import config
 from Setup.Doc import getDocumentLink, searchForDoc, create_doc_xml
+from Setup.config import config
 from z_testing.test_config import TestConfig
-from xml.etree.ElementTree import Element
 
 
 class TestDoc(TestCase):
@@ -94,6 +93,9 @@ class TestDoc(TestCase):
 
     def test_search_for_formfield(self):
         tconfig = TestConfig()
-        tconfig.init_JFW()
 
-        assert config.searchForFormField('Milestone Date')
+        tconfig.init_CDC()
+
+        dfields = config.docfields()
+        assert config.searchForFormField('Status')
+        assert config.searchForFormField('To be revised?')

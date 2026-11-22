@@ -7,13 +7,41 @@ import pytest
 from Setup.Doc import search_for_tracker
 from Setup.Outlook import initProject, autorunWFComments
 from Setup.config import config, refreshTracker
-from b_Workflow.WorkflowComments import uploadWFTracker, main, clear_workflowdata, addWorkflowData, \
-    workflowData, getAllWorkflows
+from b_Workflow.WorkflowComments import uploadWFTracker, main, addWorkflowData, \
+    DEFAULT_WORKFLOW_COLUMNS, getAllWorkflows, getWorkflows
 from z_testing.test_config import TestConfig
 from z_testing.test_Doc import TestDoc
 
 
 class TestWF:
+    def test_addworkflowdatacustom(self):
+        tconfig = TestConfig()
+        tconfig.init_CDC()
+        params = "&updated_after=2026-11-01"
+        wfNewXML = getWorkflows(params)
+        custom_columns: dict = {
+            "Tracking ID": [],
+            "To be revised?": [],
+            "Assigned to Name": [],
+            "File type": [],
+            "Document Status": [],
+            "Document Type": []
+        }
+        addWorkflowData(wfNewXML, custom_columns)
+
+    def test_addworkflowdata(self):
+        tconfig = TestConfig()
+        tconfig.init_JFW()
+        params = "&updated_after=2026-11-01"
+        wfNewXML = getWorkflows(params)
+        addWorkflowData(wfNewXML)
+
+    def test_trackingids(self):
+        trackingids = ["123", "456", "789", "111", "222", "333", "444", "567"]
+        search_query = "trackingid:{}".format(" OR trackingid:".join(trackingids))
+        print(search_query)
+
+
     @pytest.mark.integration
     def wftrackerpath(self):
         exp_filepath = config.project().getWFExportDataLocation()
@@ -69,17 +97,9 @@ class TestWF:
 
         assert main(inputUseTextFile="n", forceAll=True) == True
 
-    def test_clear_wfdata(self):
-        tconfig = TestConfig()
-        tconfig.init_JFW()
-
-        addWorkflowData(getAllWorkflows())
-        clear_workflowdata()
-        assert workflowData["Document Number"] == []
-
     @pytest.mark.integration
     def test_autorun(self):
-        projects = ["LRI UTC", "MMUH UTC"]
+        projects = ["Wolverhampton Police", "Stechford Police"] #["LRI UTC", "MMUH UTC", "Northampton JAWS"]
         for projectname in projects:
             initProject(projectname, "projectnames", False)
             success = autorunWFComments(False, projectname)
@@ -87,7 +107,6 @@ class TestWF:
                 assert config.project().projectName() == "Wolverhampton Police"
                 assert config.project().getWFPickleLocation().endswith("WPS - mails.pkl")
                 assert config.project().getWFExportDataLocation().endswith("WPS - ExportedData.xlsx")
-                assert workflowData["Document Number"] == []
 
             if projectname == "MMUH UTC":
                 assert config.project().projectName() == "MMUH UTC"

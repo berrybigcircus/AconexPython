@@ -5,7 +5,7 @@ from Setup import EAsetup, UK1setup
 from Setup.Project import getProjectsList
 from Setup.config import config, init
 from Setup.getAllProjects import getAllProjects
-from b_Workflow import WorkflowComments
+from b_Workflow import WorkflowComments, IRS
 from d_Mail.RFIs import RFITracker
 from f_AutoMail.EW import EWExcel
 
@@ -137,7 +137,11 @@ def sendEWExcel(debug : bool, projectname: str, mailno: str) -> bool:
 def autorunWFComments(debug : bool, projectname : str) -> bool:
     #Run WFComments for mail's project
     initProject(projectname, "projectnames", debug)
-    WorkflowComments.main(inputUseTextFile="n") #force all for now
+
+    if projectname == "CDC":
+        IRS.main()
+    else:
+        WorkflowComments.main(inputUseTextFile="n") #force all for now
     config.info("WorkflowComments ran successfully.")
     return True
 

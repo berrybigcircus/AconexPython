@@ -2,7 +2,7 @@ from Setup import UK1setup, EAsetup, Mail
 from Setup.config import init, config
 from Setup.getAllProjects import getAllProjects
 from a_Directory import Directory
-from b_Workflow import WorkflowComments
+from b_Workflow import WorkflowComments, IRS
 from c_Field import exporting, IssuesPhotos, inspectionPDF
 from d_Mail.Import import OutlookChecker
 #from d_Mail.Import import ImportFromExcel, OutlookChecker
@@ -25,7 +25,8 @@ def directoryMain(createdirectory : bool = False):
 
 
 def WFCommsMain():
-    WorkflowComments.main(inputUseTextFile="n", forceAll=True)
+    #WorkflowComments.main(inputUseTextFile="n", forceAll=True)
+    IRS.main()
     #WorkflowComments.main(inputUseTextFile=input("Generate from docsList.txt? (Y/N): ").lower())
 
 def fieldMain():
@@ -73,9 +74,9 @@ def main():
     # config.setPass(EAsetup.password)
     #init(UK1setup.bearer, UK1setup.env, debug=["DfE Wisbech Free School", "268454433", "FS1018"]) #Wisbech
     #init(UK1setup.bearer, UK1setup.env, debug=["Stechford Police","268456391", "SPR"]) #Stechford
-    #init(UK1setup.bearer, UK1setup.env, debug=["NUHT Community Diagnostics Centre", "268456728", "CDC"]) #CDC
+    init(UK1setup.bearer, UK1setup.env, debug=["NUHT Community Diagnostics Centre", "268456728", "CDC"]) #CDC
     #init(UK1setup.bearer, UK1setup.env, debug=["MTP", "268457782", "MTP"])
-    init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project
+    #init(UK1setup.bearer, UK1setup.env, debug=[]) #Select project
 
     #RUN PACKAGES
     #directoryMain(createdirectory=False)

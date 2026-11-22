@@ -42,7 +42,6 @@ class AconexFormField:
         else:
             self._datatype = "LIST"
 
-
     def value(self) -> str:
         if not self._value:
             return ""

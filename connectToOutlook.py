@@ -2,6 +2,8 @@ from datetime import datetime
 
 from Setup.Outlook import find_folder, connect, getLastRan, checkEmail, autorunWFComments
 from Setup.config import config
+from b_Workflow import IRS
+
 
 def main():
     outlook = connect()
