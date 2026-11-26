@@ -91,6 +91,8 @@ class Project():
             return "CMCC_51023-HBC-MCC-XX-L-W-9905"
         elif self._projectCode == "020261":
             return "020261-HBC-XX-MMUH-UTC-XX-IE-X-7905"
+        elif self._projectCode == "FS1018":
+            return "FS1018-HBC-XX-XX-L-X-2003"
         else:
             return "{}-HBC-XX-XX-L-X-9905".format(self._projectCode)
 

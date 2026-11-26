@@ -99,7 +99,7 @@ class TestWF:
 
     @pytest.mark.integration
     def test_autorun(self):
-        projects = ["Wolverhampton Police", "Stechford Police"] #["LRI UTC", "MMUH UTC", "Northampton JAWS"]
+        projects = ["LRI UTC", "MMUH UTC", "Northampton JAWS"]
         for projectname in projects:
             initProject(projectname, "projectnames", False)
             success = autorunWFComments(False, projectname)

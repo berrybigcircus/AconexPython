@@ -11,6 +11,7 @@ from xml.etree.ElementTree import Element
 
 import pandas
 import requests_cache
+from selenium.common import TimeoutException
 
 from selenium import webdriver
 from selenium.webdriver.edge.options import Options
@@ -238,18 +239,26 @@ def SelLogIn(config):
 
     driver.get("{env}/hub/index.html".format(env=config.env()))
     wait = WebDriverWait(driver, 60)
-    # type email into first screen
-    wait.until(EC.element_to_be_clickable((By.ID, "userName"))).send_keys("nicole.millinship@henrybrothers.co.uk")
-    wait.until(EC.element_to_be_clickable((By.ID, "nextButton")))
-    nextbutton = driver.find_element(By.ID, "nextButton")
-    nextbutton.click()
+
+    try:
+        WebDriverWait(driver, 5).until(lambda d: "login.microsoftonline.com" in d.current_url)
+        config.logger.debug(driver.current_url)
+    except TimeoutException:
+        config.logger.debug(driver.current_url)
+        # type email into first screen
+        wait.until(EC.element_to_be_clickable((By.ID, "userName"))).send_keys("nicole.millinship@henrybrothers.co.uk")
+        wait.until(EC.element_to_be_clickable((By.ID, "nextButton")))
+        nextbutton = driver.find_element(By.ID, "nextButton")
+        nextbutton.click()
 
     if config.env() == "https://uk1.aconex.co.uk":
         # Microsoft account selection
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,
-                                                   "div[aria-label='Sign in with nicole.millinship@henrybrothers.co.uk work or school account.']"))).click()
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Sign in with nicole.millinship@henrybrothers.co.uk work or school account.']"))).click()
+
+        # account_tile = wait.until(EC.element_to_be_clickable((By.XPATH,f"//*[contains(text(), 'nicole.millinship@henrybrothers.co.uk')]")))
+        # account_tile.click()
+
         # pick aconex account
-        config.debug(config.project().getMyUserID())
         wait.until(EC.element_to_be_clickable((By.ID, config.project().getMyUserID()))).click()
 
     else:
